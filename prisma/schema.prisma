@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        Int     @id @default(autoincrement())
+  name      String
+  phone     String  @unique
+  password  String
+  role      String  @default("passenger")
+  suspended Boolean @default(false)
+
+  rating       Float @default(0)
+  totalRatings Int   @default(0)
+
+  travelPosts        TravelPost[]
+  rideRequests       RideRequest[]
+  goodsRequests      GoodsRequest[]
+  goodsMatchesDriven GoodsMatch[]   @relation("DriverGoodsMatches")
+
+  sentMessages     Message[] @relation("SenderMessages")
+  receivedMessages Message[] @relation("ReceiverMessages")
+
+  notifications   Notification[]
+  ratingsGiven    Rating[]       @relation("GivenRatings")
+  ratingsReceived Rating[]       @relation("ReceivedRatings")
+
+  createdAt DateTime @default(now())
+}
+
+model TravelPost {
+  id Int @id @default(autoincrement())
+
+  from String
+  to   String
+
+  fromLat Float?
+  fromLng Float?
+
+  toLat Float?
+  toLng Float?
+
+  time DateTime
+
+  seatsAvailable Int
+
+  canCarryGoods Boolean
+
+  capacityKg Int
+
+  vehicleType String
+  status      String @default("scheduled")
+
+  userId Int
+
+  user User @relation(fields: [userId], references: [id])
+
+  rideRequests RideRequest[]
+
+  goodsMatches GoodsMatch[]
+
+  startedAt   DateTime?
+  pickedUpAt  DateTime?
+  droppedAt   DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model RideRequest {
+  id              Int       @id @default(autoincrement())
+  travelPostId    Int
+  passengerId     Int
+  status          String    @default("pending")
+  pickupConfirmed Boolean   @default(false)
+  dropConfirmed   Boolean   @default(false)
+  pickedUpAt      DateTime?
+  droppedAt       DateTime?
+
+  travelPost TravelPost @relation(fields: [travelPostId], references: [id])
+  passenger  User       @relation(fields: [passengerId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([travelPostId, passengerId])
+}
+
+model GoodsRequest {
+  id       Int     @id @default(autoincrement())
+  item     String
+  from     String
+  to       String
+  weightKg Float
+  note     String?
+  status   String  @default("pending")
+
+  requesterId  Int
+  requester    User @relation(fields: [requesterId], references: [id])
+  driverId     Int?
+  travelPostId Int?
+
+  matches GoodsMatch[]
+
+  createdAt DateTime @default(now())
+}
+
+model GoodsMatch {
+  id             Int    @id @default(autoincrement())
+  goodsRequestId Int
+  travelPostId   Int
+  driverId       Int
+  status         String @default("requested")
+
+  goodsRequest GoodsRequest @relation(fields: [goodsRequestId], references: [id])
+  travelPost   TravelPost   @relation(fields: [travelPostId], references: [id])
+  driver       User         @relation("DriverGoodsMatches", fields: [driverId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Message {
+  id         Int    @id @default(autoincrement())
+  senderId   Int
+  receiverId Int
+  text       String
+
+  sender   User @relation("SenderMessages", fields: [senderId], references: [id])
+  receiver User @relation("ReceiverMessages", fields: [receiverId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Notification {
+  id      Int     @id @default(autoincrement())
+  userId  Int
+  message String
+  type    String
+  link    String?
+  isRead  Boolean @default(false)
+
+  user User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+model Rating {
+  id           Int     @id @default(autoincrement())
+  raterId      Int     @map("fromUserId")
+  ratedUserId  Int     @map("toUserId")
+  travelPostId Int?
+  score        Int     @map("rating")
+  comment      String?
+
+  rater     User @relation("GivenRatings", fields: [raterId], references: [id])
+  ratedUser User @relation("ReceivedRatings", fields: [ratedUserId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([raterId, travelPostId])
+}
