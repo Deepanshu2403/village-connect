@@ -1,7 +1,8 @@
 import { Link } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import L from "leaflet";
 import { Circle, MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
+import { calculateRoute } from "../../api/locationApi";
 import { requestRide } from "../../api/rideApi";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -30,7 +31,56 @@ export default function RideMap({
   const { user } = useAuth();
   const { addToast } = useToast();
   const [bookingId, setBookingId] = useState(null);
+  const [routeGeometries, setRouteGeometries] = useState({});
   const center = userLocation ? [userLocation.lat, userLocation.lng] : INDIA_CENTER;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    rides.forEach(async (ride) => {
+      const hasCoordinates =
+        Number.isFinite(Number(ride.fromLat)) &&
+        Number.isFinite(Number(ride.fromLng)) &&
+        Number.isFinite(Number(ride.toLat)) &&
+        Number.isFinite(Number(ride.toLng));
+
+      if (!hasCoordinates) return;
+
+      try {
+        const res = await calculateRoute(
+          ride.fromLat,
+          ride.fromLng,
+          ride.toLat,
+          ride.toLng,
+          ride.vehicleType
+        );
+        if (!cancelled && res.data.geometry) {
+          const coordinates = res.data.geometry.coordinates.map((coord) => [coord[1], coord[0]]);
+          setRouteGeometries((current) =>
+            current[ride.id] ? current : { ...current, [ride.id]: coordinates }
+          );
+        }
+      } catch {
+        if (!cancelled) {
+          setRouteGeometries((current) =>
+            current[ride.id]
+              ? current
+              : {
+                  ...current,
+                  [ride.id]: [
+                    [ride.fromLat, ride.fromLng],
+                    [ride.toLat, ride.toLng],
+                  ],
+                }
+          );
+        }
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rides]);
 
   const handleBook = async (ride) => {
     if (bookingId) return;
@@ -67,7 +117,7 @@ export default function RideMap({
   };
 
   return (
-    <div className="h-[600px] overflow-hidden rounded-2xl bg-white shadow-md">
+    <div className="h-[280px] overflow-hidden rounded-2xl bg-white shadow-md md:h-[400px]">
       <MapContainer center={center} zoom={userLocation ? 11 : 5} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -92,6 +142,18 @@ export default function RideMap({
           </>
         )}
 
+        {rides.map((ride) => {
+          const routeCoords = routeGeometries[ride.id];
+          if (!routeCoords) return null;
+          return (
+            <Polyline
+              key={`route-${ride.id}`}
+              positions={routeCoords}
+              pathOptions={{ color: "#f97316", weight: 4, opacity: 0.7 }}
+            />
+          );
+        })}
+
         {rides
           .filter((ride) => Number.isFinite(Number(ride.fromLat)) && Number.isFinite(Number(ride.fromLng)))
           .map((ride) => {
@@ -107,7 +169,7 @@ export default function RideMap({
                 icon={isFull ? fullIcon : availableIcon}
               >
                 <Popup>
-                  <div className="min-w-56">
+                  <div className="min-w-[200px]">
                     <h3 className="text-base font-extrabold text-gray-950">
                       {ride.user?.name || "Driver"}
                     </h3>
@@ -115,12 +177,18 @@ export default function RideMap({
                       Rating: {ride.user?.rating ? Number(ride.user.rating).toFixed(1) : "New"}
                     </p>
                     <p className="mt-2 font-bold text-gray-900">
-                      {ride.from} → {ride.to}
+                      {ride.from} to {ride.to}
                     </p>
                     <p className="text-sm text-gray-600">{formatShortDateTime(ride.time)}</p>
-                    <p className="mt-1 text-sm text-gray-600">
-                      Seats: {ride.seatsAvailable}
-                    </p>
+                    <p className="mt-1 text-sm text-gray-600">Seats: {ride.seatsAvailable}</p>
+                    {(ride.distanceKm || ride.estimatedFare) && (
+                      <div className="mt-2 border-t border-gray-100 pt-2">
+                        <p className="text-xs text-gray-500">
+                          {ride.distanceKm ? `${ride.distanceKm}km from you` : "Fare estimate"}
+                          {ride.estimatedFare ? ` · ~Rs ${ride.estimatedFare}` : ""}
+                        </p>
+                      </div>
+                    )}
                     <div className="mt-3 flex gap-2">
                       <button
                         type="button"
@@ -128,7 +196,15 @@ export default function RideMap({
                         onClick={() => handleBook(ride)}
                         className="rounded-lg bg-orange-500 px-3 py-2 text-sm font-semibold text-white disabled:bg-gray-300"
                       >
-                        {bookingId === ride.id ? "Requesting..." : isFull ? "Full" : alreadyRequested ? "Pending" : ownTrip ? "Your trip" : "Book Seat"}
+                        {bookingId === ride.id
+                          ? "Requesting..."
+                          : isFull
+                            ? "Full"
+                            : alreadyRequested
+                              ? "Pending"
+                              : ownTrip
+                                ? "Your trip"
+                                : "Book Seat"}
                       </button>
                       <Link
                         to={`/chat/${ride.user?.id}`}
@@ -142,25 +218,6 @@ export default function RideMap({
               </Marker>
             );
           })}
-
-        {rides
-          .filter(
-            (ride) =>
-              Number.isFinite(Number(ride.fromLat)) &&
-              Number.isFinite(Number(ride.fromLng)) &&
-              Number.isFinite(Number(ride.toLat)) &&
-              Number.isFinite(Number(ride.toLng))
-          )
-          .map((ride) => (
-            <Polyline
-              key={`line-${ride.id}`}
-              positions={[
-                [ride.fromLat, ride.fromLng],
-                [ride.toLat, ride.toLng],
-              ]}
-              pathOptions={{ color: "#f97316", weight: 3, opacity: 0.72 }}
-            />
-          ))}
       </MapContainer>
     </div>
   );

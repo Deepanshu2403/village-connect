@@ -1,10 +1,56 @@
 const prisma = require("../config/db");
 const haversineKm = require("../utils/haversine");
+const { calculateFare } = require("../utils/fareCalculator");
+const { calculateRouteSummary } = require("../utils/routing");
+
+const placeSearchCache = new Map();
+const reverseGeocodeCache = new Map();
 
 const toOptionalNumber = (value) => {
   if (value === undefined || value === null || value === "") return null;
   const number = Number(value);
   return Number.isNaN(number) ? null : number;
+};
+
+const mapNominatimResults = (data) =>
+  data.map((item) => ({
+    name:
+      item.address?.village ||
+      item.address?.town ||
+      item.address?.city ||
+      item.address?.suburb ||
+      item.display_name?.split(",")[0] ||
+      "Selected location",
+    fullAddress: item.display_name,
+    lat: parseFloat(item.lat),
+    lng: parseFloat(item.lon),
+    type: item.type,
+  }));
+
+const geocodePlace = async (query) => {
+  const cleanQuery = String(query || "").trim();
+  if (cleanQuery.length < 2) return null;
+
+  const cacheKey = cleanQuery.toLowerCase();
+  if (placeSearchCache.has(cacheKey)) {
+    return placeSearchCache.get(cacheKey)[0] || null;
+  }
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&format=json&addressdetails=1&limit=5&countrycodes=in`;
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
+        "Accept-Language": "en,hi",
+      },
+    });
+    if (!response.ok) return null;
+    const results = mapNominatimResults(await response.json());
+    placeSearchCache.set(cacheKey, results);
+    return results[0] || null;
+  } catch {
+    return null;
+  }
 };
 
 const createTravelPost = async (req, res, next) => {
@@ -21,6 +67,10 @@ const createTravelPost = async (req, res, next) => {
       fromLng,
       toLat,
       toLng,
+      pickupLat,
+      pickupLng,
+      dropLat,
+      dropLng,
     } = req.body;
 
     if (req.user.role !== "driver") {
@@ -58,6 +108,34 @@ const createTravelPost = async (req, res, next) => {
       });
     }
 
+    let cleanFromLat = toOptionalNumber(fromLat ?? pickupLat);
+    let cleanFromLng = toOptionalNumber(fromLng ?? pickupLng);
+    let cleanToLat = toOptionalNumber(toLat ?? dropLat);
+    let cleanToLng = toOptionalNumber(toLng ?? dropLng);
+
+    if (cleanFromLat === null || cleanFromLng === null) {
+      const pickup = await geocodePlace(from);
+      cleanFromLat = pickup?.lat ?? cleanFromLat;
+      cleanFromLng = pickup?.lng ?? cleanFromLng;
+    }
+
+    if (cleanToLat === null || cleanToLng === null) {
+      const drop = await geocodePlace(to);
+      cleanToLat = drop?.lat ?? cleanToLat;
+      cleanToLng = drop?.lng ?? cleanToLng;
+    }
+    const routeSummary = await calculateRouteSummary(
+      cleanFromLat,
+      cleanFromLng,
+      cleanToLat,
+      cleanToLng,
+      vehicleType
+    );
+    const estimatedFare =
+      routeSummary.distanceKm !== null
+        ? calculateFare(routeSummary.distanceKm, vehicleType)
+        : null;
+
     const post = await prisma.travelPost.create({
       data: {
         from,
@@ -67,10 +145,17 @@ const createTravelPost = async (req, res, next) => {
         canCarryGoods: Boolean(canCarryGoods),
         capacityKg: capacityKg ? Number(capacityKg) : 0,
         vehicleType,
-        fromLat: toOptionalNumber(fromLat),
-        fromLng: toOptionalNumber(fromLng),
-        toLat: toOptionalNumber(toLat),
-        toLng: toOptionalNumber(toLng),
+        estimatedFare,
+        fromLat: cleanFromLat,
+        fromLng: cleanFromLng,
+        toLat: cleanToLat,
+        toLng: cleanToLng,
+        pickupLat: cleanFromLat,
+        pickupLng: cleanFromLng,
+        dropLat: cleanToLat,
+        dropLng: cleanToLng,
+        distanceKm: routeSummary.distanceKm,
+        estimatedDuration: routeSummary.estimatedDuration,
         userId: req.user.userId,
       },
       include: {
@@ -81,6 +166,114 @@ const createTravelPost = async (req, res, next) => {
     });
 
     res.status(201).json({ success: true, post });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const searchPlaces = async (req, res, next) => {
+  try {
+    const { q } = req.query;
+    const query = String(q || "").trim();
+
+    if (query.length < 2) {
+      return res.json({ success: true, results: [] });
+    }
+
+    const cacheKey = query.toLowerCase();
+    if (placeSearchCache.has(cacheKey)) {
+      return res.json({ success: true, results: placeSearchCache.get(cacheKey) });
+    }
+
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&countrycodes=in`;
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
+        "Accept-Language": "en,hi",
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ error: "Place search unavailable" });
+    }
+
+    const results = mapNominatimResults(await response.json());
+
+    placeSearchCache.set(cacheKey, results);
+    res.json({ success: true, results });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const reverseGeocode = async (req, res, next) => {
+  try {
+    const { lat, lng } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ error: "lat and lng are required" });
+    }
+
+    const cacheKey = `${Number(lat).toFixed(5)},${Number(lng).toFixed(5)}`;
+    if (reverseGeocodeCache.has(cacheKey)) {
+      return res.json(reverseGeocodeCache.get(cacheKey));
+    }
+
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
+        "Accept-Language": "en,hi",
+      },
+    });
+
+    if (!response.ok) {
+      return res.status(502).json({ error: "Reverse geocoding unavailable" });
+    }
+
+    const data = await response.json();
+    const placeName =
+      data.address?.village ||
+      data.address?.town ||
+      data.address?.city ||
+      data.address?.suburb ||
+      data.address?.county ||
+      data.display_name ||
+      "Current Location";
+
+    const payload = { success: true, placeName, fullAddress: data.display_name };
+    reverseGeocodeCache.set(cacheKey, payload);
+    res.json(payload);
+  } catch (err) {
+    next(err);
+  }
+};
+
+const calculateRoute = async (req, res, next) => {
+  try {
+    const { fromLat, fromLng, toLat, toLng, vehicleType } = req.query;
+
+    if (!fromLat || !fromLng || !toLat || !toLng) {
+      return res.status(400).json({ error: "All coordinates required" });
+    }
+
+    const routeSummary = await calculateRouteSummary(fromLat, fromLng, toLat, toLng, vehicleType);
+    if (routeSummary.distanceKm === null) {
+      return res.status(400).json({ error: "Valid coordinates required" });
+    }
+    const distanceKm = routeSummary.distanceKm;
+    const durationMin = routeSummary.estimatedDuration;
+    const estimatedFare = calculateFare(distanceKm, vehicleType);
+
+    res.json({
+      success: true,
+      distanceKm,
+      durationMin,
+      estimatedFare,
+      estimatedDuration: durationMin,
+      geometry: routeSummary.geometry,
+      source: routeSummary.source,
+    });
   } catch (err) {
     next(err);
   }
@@ -114,10 +307,14 @@ const getTravelPosts = async (req, res, next) => {
     });
 
     const filteredPosts = hasLocationFilter
-      ? posts.filter((post) => {
-          if (post.fromLat === null || post.fromLng === null) return false;
-          return haversineKm(userLat, userLng, post.fromLat, post.fromLng) <= radiusKm;
-        })
+      ? posts
+          .map((post) => {
+            if (post.fromLat === null || post.fromLng === null) return null;
+            const distanceKm = haversineKm(userLat, userLng, post.fromLat, post.fromLng);
+            if (distanceKm > radiusKm) return null;
+            return { ...post, distanceKm: Math.round(distanceKm * 10) / 10 };
+          })
+          .filter(Boolean)
       : posts;
 
     res.json({ success: true, posts: filteredPosts });
@@ -157,4 +354,11 @@ const getTravelPostById = async (req, res, next) => {
   }
 };
 
-module.exports = { createTravelPost, getTravelPosts, getTravelPostById };
+module.exports = {
+  createTravelPost,
+  getTravelPosts,
+  getTravelPostById,
+  searchPlaces,
+  reverseGeocode,
+  calculateRoute,
+};

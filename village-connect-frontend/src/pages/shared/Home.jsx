@@ -4,6 +4,7 @@ import { List, Map, MapPin, MessageCircle, Search, Star } from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { requestRide } from "../../api/rideApi";
 import { getTravelPosts } from "../../api/travelApi";
+import LocationSearch from "../../components/location/LocationSearch";
 import RideMap from "../../components/map/RideMap";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -12,7 +13,8 @@ import { formatShortDateTime, initials } from "../../utils/format";
 export default function Home() {
   const { user } = useAuth();
   const { addToast } = useToast();
-  const [filters, setFilters] = useState({ from: "", to: "" });
+  const [fromLocation, setFromLocation] = useState({ name: "", lat: null, lng: null });
+  const [toLocation, setToLocation] = useState({ name: "", lat: null, lng: null });
   const [trips, setTrips] = useState([]);
   const [myRequests, setMyRequests] = useState([]);
   const [userLocation, setUserLocation] = useState(null);
@@ -34,10 +36,23 @@ export default function Home() {
   );
 
   const buildParams = useCallback(
-    (nextFilters = filters, useLocation = locationFilter, nextLocation = userLocation) => {
+    (
+      nextFrom = fromLocation,
+      nextTo = toLocation,
+      useLocation = locationFilter,
+      nextLocation = userLocation
+    ) => {
       const params = {};
-      if (nextFilters.from.trim()) params.from = nextFilters.from.trim();
-      if (nextFilters.to.trim()) params.to = nextFilters.to.trim();
+      if (nextFrom.name.trim()) params.from = nextFrom.name.trim();
+      if (nextTo.name.trim()) params.to = nextTo.name.trim();
+      if (nextFrom.lat && nextFrom.lng) {
+        params.fromLat = nextFrom.lat;
+        params.fromLng = nextFrom.lng;
+      }
+      if (nextTo.lat && nextTo.lng) {
+        params.toLat = nextTo.lat;
+        params.toLng = nextTo.lng;
+      }
       if (useLocation && nextLocation) {
         params.userLat = nextLocation.lat;
         params.userLng = nextLocation.lng;
@@ -45,7 +60,7 @@ export default function Home() {
       }
       return params;
     },
-    [filters, locationFilter, userLocation]
+    [fromLocation, locationFilter, toLocation, userLocation]
   );
 
   const fetchTrips = useCallback(
@@ -93,14 +108,14 @@ export default function Home() {
         setUserLocation(nextLocation);
         setLocationFilter(true);
         addToast("Location detected", "success");
-        fetchTrips(buildParams(filters, true, nextLocation));
+        fetchTrips(buildParams(fromLocation, toLocation, true, nextLocation));
         setLocating(false);
       },
       () => {
         addToast("Location access denied. Showing all available rides.", "warning");
         setLocationFilter(false);
         setLocating(false);
-        fetchTrips(buildParams(filters, false, null));
+        fetchTrips(buildParams(fromLocation, toLocation, false, null));
       },
       { enableHighAccuracy: true, timeout: 10000 }
     );
@@ -108,7 +123,7 @@ export default function Home() {
 
   const handleLocationToggle = (checked) => {
     setLocationFilter(checked);
-    fetchTrips(buildParams(filters, checked, userLocation));
+    fetchTrips(buildParams(fromLocation, toLocation, checked, userLocation));
   };
 
   const handleBook = async (trip) => {
@@ -163,12 +178,12 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
       <div className="mx-auto max-w-7xl">
-        <section className="rounded-3xl bg-gray-900 p-6 text-white shadow-md sm:p-8">
-          <p className="font-semibold text-orange-300">Ride search</p>
-          <h1 className="mt-2 text-3xl font-extrabold sm:text-5xl">Find a route near you</h1>
-          <p className="mt-3 max-w-2xl text-gray-300">
+        <section className="rounded-2xl bg-gray-900 p-3 text-white shadow-md md:p-5">
+          <p className="text-sm font-semibold text-orange-300">Ride search</p>
+          <h1 className="mt-1 text-lg font-extrabold md:text-xl">Find a route near you</h1>
+          <p className="mt-2 max-w-2xl text-sm text-gray-300">
             Search by village or town, use your location to show pickup points within 10 km,
             and book an available seat.
           </p>
@@ -176,19 +191,24 @@ export default function Home() {
 
         <form
           onSubmit={handleSearch}
-          className="mt-6 grid gap-3 rounded-2xl bg-white p-4 shadow-md lg:grid-cols-[1fr_1fr_auto_auto]"
+          className="mt-4 grid grid-cols-1 gap-3 rounded-2xl bg-white p-3 shadow-md md:p-5 lg:grid-cols-[1fr_1fr_auto_auto]"
         >
-          <input
-            value={filters.from}
-            onChange={(event) => setFilters({ ...filters, from: event.target.value })}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
+          <LocationSearch
+            value={fromLocation}
+            onChange={setFromLocation}
+            onCoordinatesChange={(coords) =>
+              setFromLocation((current) => ({ ...current, ...coords }))
+            }
             placeholder="From village or town"
           />
-          <input
-            value={filters.to}
-            onChange={(event) => setFilters({ ...filters, to: event.target.value })}
-            className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400"
+          <LocationSearch
+            value={toLocation}
+            onChange={setToLocation}
+            onCoordinatesChange={(coords) =>
+              setToLocation((current) => ({ ...current, ...coords }))
+            }
             placeholder="To village or town"
+            showCurrentLocation={false}
           />
           <button
             type="button"
@@ -208,7 +228,7 @@ export default function Home() {
           </button>
         </form>
 
-        <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-white p-4 shadow-md sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-4 flex flex-col gap-3 rounded-2xl bg-white p-3 shadow-md md:flex-row md:items-center md:justify-between md:p-5">
           <div>
             <p className="font-bold text-gray-950">
               {userLocation ? "Location detected" : "Location not detected"}
@@ -231,10 +251,10 @@ export default function Home() {
           </label>
         </div>
 
-        <div className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="mt-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-extrabold text-gray-950">Results</h2>
-            <p className="text-gray-500">{trips.length} ride{trips.length === 1 ? "" : "s"} found</p>
+            <h2 className="text-lg font-extrabold text-gray-950 md:text-xl">Results</h2>
+            <p className="text-sm text-gray-500">{trips.length} ride{trips.length === 1 ? "" : "s"} found</p>
           </div>
           <div className="grid grid-cols-2 rounded-2xl bg-white p-1 shadow-md">
             <ViewButton active={view === "list"} onClick={() => setView("list")} icon={List}>
@@ -303,7 +323,7 @@ const TripCard = ({ trip, userId, requested, requesting, onBook }) => {
   const disabled = full || requested || ownTrip || requesting;
 
   return (
-    <article className="rounded-2xl bg-white p-6 shadow-md">
+    <article className="rounded-2xl bg-white p-3 shadow-md md:p-5">
       <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
         <div className="flex gap-4">
           <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-orange-100 font-extrabold text-orange-700">
@@ -323,6 +343,11 @@ const TripCard = ({ trip, userId, requested, requesting, onBook }) => {
             <div className="mt-3 flex flex-wrap gap-2">
               <Badge>{trip.vehicleType}</Badge>
               <Badge>{trip.seatsAvailable} seats</Badge>
+              {trip.estimatedFare && (
+                <span className="rounded-full bg-green-50 px-2 py-0.5 text-sm font-bold text-green-700">
+                  ~Rs {trip.estimatedFare}
+                </span>
+              )}
               {trip.canCarryGoods && <Badge>{trip.capacityKg} kg goods</Badge>}
               <span className="inline-flex items-center gap-1 rounded-full bg-yellow-100 px-3 py-1 text-xs font-semibold text-yellow-700">
                 <Star className="h-3.5 w-3.5 fill-yellow-500 text-yellow-500" />

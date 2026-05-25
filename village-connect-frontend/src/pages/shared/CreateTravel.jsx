@@ -1,51 +1,60 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { LocateFixed } from "lucide-react";
 import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
 import { createTravel } from "../../api/travelApi";
 import { getDriverDashboard } from "../../api/dashboardApi";
+import { calculateRoute } from "../../api/locationApi";
+import LocationSearch from "../../components/location/LocationSearch";
 import { useToast } from "../../context/ToastContext";
 
 const INDIA_CENTER = { lat: 20.5937, lng: 78.9629 };
 
+const VEHICLE_TYPES = [
+  { value: "Bike", label: "Bike", seats: 1 },
+  { value: "Scooty", label: "Scooty", seats: 1 },
+  { value: "Auto Rickshaw", label: "Auto Rickshaw", seats: 3 },
+  { value: "Car", label: "Car", seats: 4 },
+  { value: "Jeep", label: "Jeep", seats: 6 },
+  { value: "Van", label: "Van", seats: 8 },
+  { value: "Pickup Vehicle", label: "Pickup Vehicle", seats: 2 },
+  { value: "Tractor Trolley", label: "Tractor Trolley", seats: 10 },
+  { value: "Shared Bike", label: "Shared Bike", seats: 1 },
+];
+
 const initialForm = {
-  from: "",
-  to: "",
   time: "",
-  seatsAvailable: 1,
+  seatsAvailable: 4,
   vehicleType: "Car",
   canCarryGoods: false,
   capacityKg: 0,
-  fromLat: "",
-  fromLng: "",
-  toLat: "",
-  toLng: "",
 };
 
 export default function CreateTravel() {
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
+  const [fromLocation, setFromLocation] = useState({ name: "", lat: null, lng: null });
+  const [toLocation, setToLocation] = useState({ name: "", lat: null, lng: null });
+  const [routeInfo, setRouteInfo] = useState(null);
   const [loading, setLoading] = useState(false);
   const [checkingActiveTrip, setCheckingActiveTrip] = useState(true);
   const [hasActiveTrip, setHasActiveTrip] = useState(false);
-  const [locating, setLocating] = useState(false);
   const [error, setError] = useState("");
 
   const fromPosition = useMemo(
     () =>
-      form.fromLat && form.fromLng
-        ? { lat: Number(form.fromLat), lng: Number(form.fromLng) }
+      Number.isFinite(Number(fromLocation.lat)) && Number.isFinite(Number(fromLocation.lng))
+        ? { lat: Number(fromLocation.lat), lng: Number(fromLocation.lng) }
         : INDIA_CENTER,
-    [form.fromLat, form.fromLng]
+    [fromLocation.lat, fromLocation.lng]
   );
 
   const toPosition = useMemo(
     () =>
-      form.toLat && form.toLng
-        ? { lat: Number(form.toLat), lng: Number(form.toLng) }
+      Number.isFinite(Number(toLocation.lat)) && Number.isFinite(Number(toLocation.lng))
+        ? { lat: Number(toLocation.lat), lng: Number(toLocation.lng) }
         : INDIA_CENTER,
-    [form.toLat, form.toLng]
+    [toLocation.lat, toLocation.lng]
   );
 
   const update = (field, value) => setForm((current) => ({ ...current, [field]: value }));
@@ -69,60 +78,42 @@ export default function CreateTravel() {
     };
   }, [addToast]);
 
-  const reverseGeocode = async (lat, lng) => {
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`
-      );
-      const data = await response.json();
-      return (
-        data.address?.village ||
-        data.address?.town ||
-        data.address?.city ||
-        data.address?.county ||
-        data.display_name ||
-        ""
-      );
-    } catch {
-      return "";
-    }
-  };
-
-  const useCurrentLocationForFrom = () => {
-    if (!navigator.geolocation) {
-      addToast("Geolocation is not supported in this browser", "error");
+  useEffect(() => {
+    if (
+      fromLocation.lat &&
+      fromLocation.lng &&
+      toLocation.lat &&
+      toLocation.lng
+    ) {
+      calculateRoute(
+        fromLocation.lat,
+        fromLocation.lng,
+        toLocation.lat,
+        toLocation.lng,
+        form.vehicleType
+      )
+        .then((res) => setRouteInfo(res.data))
+        .catch(() => setRouteInfo(null));
       return;
     }
+    setRouteInfo(null);
+  }, [fromLocation, toLocation, form.vehicleType]);
 
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
-        const placeName = await reverseGeocode(lat, lng);
-        setForm((current) => ({
-          ...current,
-          from: placeName || current.from,
-          fromLat: lat,
-          fromLng: lng,
-        }));
-        addToast("Pickup location detected", "success");
-        setLocating(false);
-      },
-      () => {
-        addToast("Location access denied", "error");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
-
-  const setLocation = (type, lat, lng) => {
+  const handleVehicleChange = (vehicleType) => {
+    const selected = VEHICLE_TYPES.find((item) => item.value === vehicleType);
     setForm((current) => ({
       ...current,
-      [`${type}Lat`]: lat,
-      [`${type}Lng`]: lng,
+      vehicleType,
+      seatsAvailable: selected?.seats || current.seatsAvailable,
     }));
+  };
+
+  const setLocationFromMap = (type, lat, lng) => {
+    if (type === "from") {
+      setFromLocation((current) => ({ ...current, lat, lng }));
+    } else {
+      setToLocation((current) => ({ ...current, lat, lng }));
+    }
   };
 
   const handleSubmit = async (event) => {
@@ -130,7 +121,7 @@ export default function CreateTravel() {
     if (loading) return;
     setError("");
 
-    if (!form.from.trim() || !form.to.trim() || !form.time || !form.vehicleType) {
+    if (!fromLocation.name.trim() || !toLocation.name.trim() || !form.time || !form.vehicleType) {
       setError("From, to, date/time, and vehicle type are required.");
       return;
     }
@@ -146,13 +137,17 @@ export default function CreateTravel() {
     setLoading(true);
     try {
       await createTravel({
-        ...form,
+        from: fromLocation.name,
+        to: toLocation.name,
+        time: form.time,
+        vehicleType: form.vehicleType,
         seatsAvailable: Number(form.seatsAvailable),
+        canCarryGoods: form.canCarryGoods,
         capacityKg: form.canCarryGoods ? Number(form.capacityKg) : 0,
-        fromLat: form.fromLat === "" ? null : Number(form.fromLat),
-        fromLng: form.fromLng === "" ? null : Number(form.fromLng),
-        toLat: form.toLat === "" ? null : Number(form.toLat),
-        toLng: form.toLng === "" ? null : Number(form.toLng),
+        fromLat: fromLocation.lat,
+        fromLng: fromLocation.lng,
+        toLat: toLocation.lat,
+        toLng: toLocation.lng,
       });
       addToast("Travel route posted successfully", "success");
       navigate("/driver");
@@ -166,119 +161,156 @@ export default function CreateTravel() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+    <main className="min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
       <div className="mx-auto max-w-5xl">
-        <div className="mb-6">
-          <p className="font-semibold text-orange-600">Driver tools</p>
-          <h1 className="mt-2 text-3xl font-extrabold text-gray-950">Post a travel route</h1>
-          <p className="mt-2 text-gray-500">
-            Add route details and place draggable markers for pickup and dropoff.
+        <div className="mb-4 md:mb-6">
+          <p className="text-sm font-semibold text-orange-600">Driver tools</p>
+          <h1 className="mt-1 text-lg font-extrabold text-gray-950 md:text-xl">
+            Post a travel route
+          </h1>
+          <p className="mt-1 text-sm text-gray-500">
+            Add route details and place markers for pickup and dropoff.
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-5 rounded-2xl bg-white p-6 shadow-md" noValidate>
+        <form onSubmit={handleSubmit} className="grid gap-4 rounded-2xl bg-white p-3 shadow-md md:p-5" noValidate>
           {checkingActiveTrip ? (
-            <div className="rounded-2xl bg-white p-6 text-center text-sm font-semibold text-gray-600">
+            <div className="rounded-2xl bg-white p-4 text-center text-sm font-semibold text-gray-600 md:p-5">
               Checking your active trips...
             </div>
           ) : hasActiveTrip ? (
-            <div className="rounded-2xl bg-yellow-50 border border-yellow-200 p-6 text-center">
-              <div className="text-4xl mb-3">!</div>
+            <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-center md:p-5">
               <h3 className="text-base font-bold text-gray-900">You have an active trip</h3>
-              <p className="text-sm text-gray-500 mt-2">
+              <p className="mt-2 text-sm text-gray-500">
                 Complete or cancel your current trip before posting a new one.
               </p>
               <button
                 type="button"
                 onClick={() => navigate("/driver")}
-                className="mt-4 inline-flex bg-orange-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold"
+                className="mt-4 rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white"
               >
                 Go to Dashboard
               </button>
             </div>
           ) : (
             <>
-          {error && <div className="rounded-2xl bg-red-50 p-4 text-sm font-semibold text-red-600">{error}</div>}
+              {error && (
+                <div className="rounded-2xl bg-red-50 p-3 text-sm font-semibold text-red-600 md:p-4">
+                  {error}
+                </div>
+              )}
 
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="From">
-              <div className="flex gap-2">
-                <input
-                  value={form.from}
-                  onChange={(e) => update("from", e.target.value)}
-                  className={inputClass}
-                  placeholder="Starting village"
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <LocationSearch
+                  label="From (Village / Town)"
+                  placeholder="Rampur Village, Bus Stand"
+                  value={fromLocation}
+                  onChange={setFromLocation}
+                  onCoordinatesChange={(coords) =>
+                    setFromLocation((current) => ({ ...current, ...coords }))
+                  }
                 />
-                <button
-                  type="button"
-                  onClick={useCurrentLocationForFrom}
-                  disabled={locating}
-                  className="grid h-12 w-12 shrink-0 place-items-center rounded-xl border border-gray-200 hover:border-orange-400 disabled:opacity-60"
-                  title="Use current location"
-                >
-                  <LocateFixed className="h-5 w-5 text-orange-600" />
-                </button>
+                <LocationSearch
+                  label="To (Village / Town)"
+                  placeholder="City Market, Main Chowk"
+                  value={toLocation}
+                  onChange={setToLocation}
+                  onCoordinatesChange={(coords) =>
+                    setToLocation((current) => ({ ...current, ...coords }))
+                  }
+                  showCurrentLocation={false}
+                />
+                <Field label="Date and time">
+                  <input
+                    type="datetime-local"
+                    value={form.time}
+                    onChange={(event) => update("time", event.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <Field label="Vehicle type">
+                  <select
+                    value={form.vehicleType}
+                    onChange={(event) => handleVehicleChange(event.target.value)}
+                    className={inputClass}
+                  >
+                    {VEHICLE_TYPES.map((vehicle) => (
+                      <option key={vehicle.value} value={vehicle.value}>
+                        {vehicle.label}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Seats available">
+                  <input
+                    type="number"
+                    min="1"
+                    value={form.seatsAvailable}
+                    onChange={(event) => update("seatsAvailable", event.target.value)}
+                    className={inputClass}
+                  />
+                </Field>
+                <label className="flex items-center justify-between gap-4 rounded-2xl border border-gray-200 bg-gray-50 px-3 py-3 md:px-4">
+                  <span>
+                    <span className="block text-sm font-bold text-gray-800">Can carry goods</span>
+                    <span className="text-sm text-gray-500">Allow parcel requests on this trip</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={form.canCarryGoods}
+                    onChange={(event) => update("canCarryGoods", event.target.checked)}
+                    className="h-5 w-5 accent-orange-500"
+                  />
+                </label>
+                {form.canCarryGoods && (
+                  <Field label="Goods capacity (kg)">
+                    <input
+                      type="number"
+                      min="1"
+                      value={form.capacityKg}
+                      onChange={(event) => update("capacityKg", event.target.value)}
+                      className={inputClass}
+                    />
+                  </Field>
+                )}
               </div>
-            </Field>
-            <Field label="To">
-              <input value={form.to} onChange={(e) => update("to", e.target.value)} className={inputClass} placeholder="Destination" />
-            </Field>
-            <Field label="Date and time">
-              <input type="datetime-local" value={form.time} onChange={(e) => update("time", e.target.value)} className={inputClass} />
-            </Field>
-            <Field label="Vehicle type">
-              <select value={form.vehicleType} onChange={(e) => update("vehicleType", e.target.value)} className={inputClass}>
-                <option>Car</option>
-                <option>Jeep</option>
-                <option>Van</option>
-                <option>Auto</option>
-                <option>Bus</option>
-                <option>Truck</option>
-                <option>Tractor</option>
-              </select>
-            </Field>
-            <Field label="Seats available">
-              <input type="number" min="1" value={form.seatsAvailable} onChange={(e) => update("seatsAvailable", e.target.value)} className={inputClass} />
-            </Field>
-            <label className="flex items-center justify-between rounded-2xl border border-gray-200 bg-gray-50 px-4 py-3">
-              <span>
-                <span className="block font-bold text-gray-800">Can carry goods</span>
-                <span className="text-sm text-gray-500">Allow parcel requests on this trip</span>
-              </span>
-              <input
-                type="checkbox"
-                checked={form.canCarryGoods}
-                onChange={(e) => update("canCarryGoods", e.target.checked)}
-                className="h-5 w-5 accent-orange-500"
-              />
-            </label>
-            {form.canCarryGoods && (
-              <Field label="Goods capacity (kg)">
-                <input type="number" min="1" value={form.capacityKg} onChange={(e) => update("capacityKg", e.target.value)} className={inputClass} />
-              </Field>
-            )}
-          </div>
 
-          <div className="grid gap-5 lg:grid-cols-2">
-            <LocationPicker
-              title="Pickup location"
-              position={fromPosition}
-              onChange={(lat, lng) => setLocation("from", lat, lng)}
-            />
-            <LocationPicker
-              title="Dropoff location"
-              position={toPosition}
-              onChange={(lat, lng) => setLocation("to", lat, lng)}
-            />
-          </div>
+              {routeInfo && (
+                <div className="rounded-xl border border-orange-200 bg-orange-50 p-3">
+                  <div className="flex flex-wrap items-center gap-4">
+                    <span className="text-sm font-semibold text-gray-800">
+                      {routeInfo.distanceKm} km
+                    </span>
+                    <span className="text-sm text-gray-600">
+                      ~{routeInfo.durationMin} min
+                    </span>
+                    <span className="text-sm font-bold text-orange-600">
+                      Rs {routeInfo.estimatedFare} estimated fare
+                    </span>
+                  </div>
+                </div>
+              )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="rounded-xl bg-orange-500 px-5 py-3 font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
-          >
-            {loading ? "Posting route..." : "Post Travel"}
-          </button>
+              <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
+                <LocationPicker
+                  title="Pickup location"
+                  position={fromPosition}
+                  onChange={(lat, lng) => setLocationFromMap("from", lat, lng)}
+                />
+                <LocationPicker
+                  title="Dropoff location"
+                  position={toPosition}
+                  onChange={(lat, lng) => setLocationFromMap("to", lat, lng)}
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="rounded-xl bg-orange-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:opacity-60"
+              >
+                {loading ? "Posting route..." : "Post Travel"}
+              </button>
             </>
           )}
         </form>
@@ -289,17 +321,17 @@ export default function CreateTravel() {
 
 const LocationPicker = ({ title, position, onChange }) => (
   <div>
-    <div className="mb-2 flex items-center justify-between gap-3">
+    <div className="mb-2 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
       <h2 className="text-sm font-bold text-gray-700">{title}</h2>
       <p className="text-xs font-semibold text-gray-500">
         {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
       </p>
     </div>
-    <div className="h-80 overflow-hidden rounded-2xl border border-gray-200">
+    <div className="h-[280px] overflow-hidden rounded-2xl border border-gray-200 md:h-[400px]">
       <MapContainer
-        key={`${position.lat}-${position.lng}`}
+        key={`${title}-${position.lat}-${position.lng}`}
         center={[position.lat, position.lng]}
-        zoom={position === INDIA_CENTER ? 5 : 12}
+        zoom={position.lat === INDIA_CENTER.lat && position.lng === INDIA_CENTER.lng ? 5 : 12}
         className="h-full w-full"
       >
         <TileLayer
@@ -333,11 +365,12 @@ const MapClickHandler = ({ onChange }) => {
   return null;
 };
 
-const inputClass = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400";
+const inputClass =
+  "w-full rounded-xl border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400";
 
 const Field = ({ label, children }) => (
   <label className="block">
-    <span className="mb-2 block text-sm font-bold text-gray-700">{label}</span>
+    <span className="mb-1.5 block text-xs font-semibold text-gray-700">{label}</span>
     {children}
   </label>
 );

@@ -1,0 +1,1 @@
+-- Restored empty migration file so Prisma can read the migration history.

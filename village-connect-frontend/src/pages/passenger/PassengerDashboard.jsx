@@ -15,10 +15,12 @@ import {
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { deletePassengerRequest } from "../../api/rideApi";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 
 export default function PassengerDashboard() {
   const { user } = useAuth();
+  const { on, off } = useSocket() || {};
   const { addToast } = useToast();
   const [dashData, setDashData] = useState({
     activeRide: null,
@@ -54,6 +56,45 @@ export default function PassengerDashboard() {
     const interval = window.setInterval(() => fetchDashboard(true), 20000);
     return () => window.clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!on || !off) return undefined;
+
+    const handleRideAccepted = (eventData) => {
+      addToast(`Your ride to ${eventData.post?.to || "your destination"} was accepted`, "success");
+      fetchDashboard(true);
+    };
+    const handleRideRejected = (eventData) => {
+      addToast(`Your ride request for ${eventData.from} to ${eventData.to} was not accepted`, "info");
+      fetchDashboard(true);
+    };
+    const handleRideStarted = () => {
+      addToast("Your driver has started the trip", "success");
+      fetchDashboard(true);
+    };
+    const handleRideCompleted = () => {
+      addToast("Trip completed. Please rate your driver.", "success");
+      fetchDashboard(true);
+    };
+    const handleRideUpdated = () => fetchDashboard(true);
+    const handleDashboardRefresh = () => fetchDashboard(true);
+
+    on("ride:accepted", handleRideAccepted);
+    on("ride:rejected", handleRideRejected);
+    on("ride:started", handleRideStarted);
+    on("ride:completed", handleRideCompleted);
+    on("ride:updated", handleRideUpdated);
+    on("dashboard:refresh", handleDashboardRefresh);
+
+    return () => {
+      off("ride:accepted", handleRideAccepted);
+      off("ride:rejected", handleRideRejected);
+      off("ride:started", handleRideStarted);
+      off("ride:completed", handleRideCompleted);
+      off("ride:updated", handleRideUpdated);
+      off("dashboard:refresh", handleDashboardRefresh);
+    };
+  }, [addToast, off, on]);
 
   const handleDeleteRequest = async (requestId) => {
     if (deletingId) return;
@@ -228,6 +269,7 @@ function ActiveRideCard({ ride }) {
       </div>
 
       <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} />
+      <FareBadge fare={ride.travelPost?.estimatedFare} />
       <DriverContactCard driver={driver} vehicleType={ride.travelPost?.vehicleType} tone="blue" />
 
       {ride.pickupConfirmed && (
@@ -260,6 +302,7 @@ function ConfirmedRideCard({ ride }) {
       </div>
 
       <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} />
+      <FareBadge fare={ride.travelPost?.estimatedFare} />
       <p className="mb-3 mt-3 flex items-center gap-1 text-sm text-gray-500">
         <Clock className="h-4 w-4" />
         {new Date(ride.travelPost?.time).toLocaleString("en-IN", {
@@ -344,6 +387,7 @@ function PendingRideCard({ ride, deletingId, onDelete }) {
     <article className="flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
       <div className="min-w-0">
         <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} compact />
+        <FareBadge fare={ride.travelPost?.estimatedFare} />
         <p className="mt-2 text-xs text-gray-500">Driver: {ride.travelPost?.user?.name}</p>
         <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
           <Clock className="h-3 w-3" />
@@ -517,6 +561,15 @@ function StatusBadge({ children, tone = "gray" }) {
   return (
     <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
       {children}
+    </span>
+  );
+}
+
+function FareBadge({ fare }) {
+  if (!fare) return null;
+  return (
+    <span className="mt-2 inline-flex rounded-full bg-green-50 px-2 py-0.5 text-sm font-bold text-green-700">
+      ~Rs {fare}
     </span>
   );
 }

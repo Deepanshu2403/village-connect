@@ -3,12 +3,14 @@ import { useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { getChat, sendMessage } from "../../api/chatApi";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import { formatShortDateTime } from "../../utils/format";
 
 export default function ChatPage() {
   const { userId } = useParams();
   const { user } = useAuth();
+  const { on, off, emit, isConnected } = useSocket() || {};
   const { addToast } = useToast();
   const bottomRef = useRef(null);
   const [contact, setContact] = useState(null);
@@ -39,6 +41,35 @@ export default function ChatPage() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    if (!on || !off) return undefined;
+
+    const handleMessage = (message) => {
+      const belongsToConversation =
+        (Number(message.senderId) === Number(userId) && Number(message.receiverId) === Number(user?.id)) ||
+        (Number(message.senderId) === Number(user?.id) && Number(message.receiverId) === Number(userId));
+
+      if (!belongsToConversation) return;
+
+      setMessages((current) => {
+        if (current.some((item) => item.id === message.id)) return current;
+        return [...current, message];
+      });
+      window.requestAnimationFrame(() => {
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+      });
+    };
+
+    const handleError = () => addToast("Message could not be sent", "error");
+
+    on("chat:message", handleMessage);
+    on("chat:error", handleError);
+    return () => {
+      off("chat:message", handleMessage);
+      off("chat:error", handleError);
+    };
+  }, [addToast, off, on, user?.id, userId]);
+
   const handleSend = async (event) => {
     event.preventDefault();
     const cleanText = text.trim();
@@ -46,9 +77,13 @@ export default function ChatPage() {
 
     setSending(true);
     try {
-      await sendMessage(userId, cleanText);
+      if (isConnected && emit) {
+        emit("chat:send", { receiverId: userId, text: cleanText });
+      } else {
+        await sendMessage(userId, cleanText);
+        await fetchChat();
+      }
       setText("");
-      await fetchChat();
     } catch {
       addToast("Message could not be sent", "error");
     } finally {

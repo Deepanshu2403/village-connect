@@ -1,7 +1,9 @@
 const express = require("express");
+const http = require("http");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
+const { Server } = require("socket.io");
 require("dotenv").config();
 
 const { connectPrisma, disconnectPrisma } = require("./config/db");
@@ -20,6 +22,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
+const httpServer = http.createServer(app);
 let server;
 let shuttingDown = false;
 
@@ -42,6 +45,121 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
+
+const io = new Server(httpServer, {
+  cors: {
+    origin: corsOptions.origin,
+    credentials: true,
+    methods: ["GET", "POST"],
+  },
+  transports: ["websocket", "polling"],
+  pingTimeout: 60000,
+  pingInterval: 25000,
+});
+
+app.set("io", io);
+global.io = io;
+
+io.use((socket, next) => {
+  const token = socket.handshake.auth?.token;
+  if (!token) {
+    return next(new Error("Authentication required"));
+  }
+
+  try {
+    const jwt = require("jsonwebtoken");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    socket.userId = decoded.userId;
+    socket.userRole = decoded.role;
+    next();
+  } catch {
+    next(new Error("Invalid token"));
+  }
+});
+
+io.on("connection", (socket) => {
+  const userId = socket.userId;
+  console.log(`[SOCKET] User ${userId} connected`);
+
+  socket.join(`user:${userId}`);
+
+  socket.on("join:ride", (rideId) => {
+    socket.join(`ride:${rideId}`);
+    console.log(`[SOCKET] User ${userId} joined ride room ${rideId}`);
+  });
+
+  socket.on("leave:ride", (rideId) => {
+    socket.leave(`ride:${rideId}`);
+  });
+
+  socket.on("chat:send", async (data) => {
+    const { receiverId, text } = data || {};
+    if (!text?.trim() || !receiverId) return;
+
+    try {
+      const prisma = require("./config/db");
+      const message = await prisma.message.create({
+        data: {
+          senderId: userId,
+          receiverId: Number(receiverId),
+          text: text.trim(),
+        },
+        include: {
+          sender: { select: { id: true, name: true } },
+        },
+      });
+
+      const createNotification = require("./utils/createNotification");
+      await createNotification(
+        Number(receiverId),
+        `${message.sender?.name || "Someone"} sent you a message`,
+        `/chat/${userId}`,
+        "MESSAGE"
+      );
+
+      io.to(`user:${receiverId}`).emit("chat:message", message);
+      socket.emit("chat:message", message);
+    } catch (err) {
+      console.error("[SOCKET] Chat send failed:", err.message);
+      socket.emit("chat:error", { error: "Failed to send message" });
+    }
+  });
+
+  socket.on("location:update", async (data) => {
+    const { lat, lng, travelPostId } = data || {};
+    if (!lat || !lng || socket.userRole !== "driver") return;
+
+    try {
+      const prisma = require("./config/db");
+      const cleanTravelPostId = travelPostId ? Number(travelPostId) : null;
+      await prisma.driverLocation.upsert({
+        where: { driverId: userId },
+        update: { lat: Number(lat), lng: Number(lng), travelPostId: cleanTravelPostId },
+        create: {
+          driverId: userId,
+          lat: Number(lat),
+          lng: Number(lng),
+          travelPostId: cleanTravelPostId,
+        },
+      });
+
+      if (travelPostId) {
+        io.to(`ride:${travelPostId}`).emit("location:update", {
+          driverId: userId,
+          lat: Number(lat),
+          lng: Number(lng),
+          timestamp: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error("[SOCKET] Location update failed:", err.message);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`[SOCKET] User ${userId} disconnected`);
+  });
+});
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
@@ -160,7 +278,7 @@ const startServer = async () => {
       reject(err);
     };
 
-    server = app.listen(PORT, "0.0.0.0");
+    server = httpServer.listen(PORT, "0.0.0.0");
     server.once("listening", onListening);
     server.once("error", onError);
   });
@@ -187,6 +305,7 @@ if (require.main === module) {
 
 module.exports = {
   app,
+  httpServer,
   startServer,
   shutdown,
 };

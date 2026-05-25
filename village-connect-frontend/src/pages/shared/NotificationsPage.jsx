@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Loader2, Trash2, CheckCheck, BellOff } from "lucide-react";
+import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import {
   getNotifications,
@@ -14,6 +15,7 @@ import { timeAgo } from "../../utils/timeAgo";
 
 export default function NotificationsPage() {
   const navigate = useNavigate();
+  const { on, off } = useSocket() || {};
   const { addToast } = useToast();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -35,6 +37,20 @@ export default function NotificationsPage() {
   useEffect(() => {
     fetchNotifications();
   }, []);
+
+  useEffect(() => {
+    if (!on || !off) return undefined;
+
+    const handleNewNotification = (notification) => {
+      setNotifications((current) => {
+        if (current.some((item) => item.id === notification.id)) return current;
+        return [notification, ...current];
+      });
+    };
+
+    on("notification:new", handleNewNotification);
+    return () => off("notification:new", handleNewNotification);
+  }, [off, on]);
 
   const handleClick = async (notif) => {
     if (!notif.isRead) {

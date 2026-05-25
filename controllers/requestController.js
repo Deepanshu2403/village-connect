@@ -1,7 +1,9 @@
 const prisma = require("../config/db");
 const createNotification = require("../utils/createNotification");
+const { emitToRide, emitToUser } = require("../utils/socketEmit");
 
 const PENDING_STATUSES = ["pending", "requested"];
+const ACTIVE_RIDE_STATUSES = ["accepted", "ongoing", "pickup_done"];
 
 const requestRide = async (req, res, next) => {
   try {
@@ -31,7 +33,7 @@ const requestRide = async (req, res, next) => {
     const activeRide = await prisma.rideRequest.findFirst({
       where: {
         passengerId,
-        status: { in: ["accepted", "ongoing"] },
+        status: { in: ACTIVE_RIDE_STATUSES },
       },
     });
 
@@ -45,7 +47,7 @@ const requestRide = async (req, res, next) => {
       where: {
         travelPostId,
         passengerId,
-        status: { in: ["pending", "requested", "accepted", "ongoing"] },
+        status: { in: [...PENDING_STATUSES, ...ACTIVE_RIDE_STATUSES] },
       },
     });
 
@@ -76,6 +78,13 @@ const requestRide = async (req, res, next) => {
       `/travel/${post.id}`,
       "RIDE_REQUEST"
     );
+
+    emitToUser(post.userId, "ride:new_request", {
+      passengerName: passenger?.name || "A passenger",
+      travelPostId: Number(travelPostId),
+      from: post.from,
+      to: post.to,
+    });
 
     res.status(201).json({ success: true, request });
   } catch (err) {
@@ -111,6 +120,16 @@ const acceptRequest = async (req, res, next) => {
       if (request.travelPost.seatsAvailable <= 0) {
         throw Object.assign(new Error("No seats available"), { statusCode: 400 });
       }
+      const passengerActiveRide = await tx.rideRequest.findFirst({
+        where: {
+          passengerId: request.passengerId,
+          id: { not: request.id },
+          status: { in: ACTIVE_RIDE_STATUSES },
+        },
+      });
+      if (passengerActiveRide) {
+        throw Object.assign(new Error("Passenger already has an active ride"), { statusCode: 400 });
+      }
 
       await tx.rideRequest.update({
         where: { id: requestId },
@@ -122,7 +141,7 @@ const acceptRequest = async (req, res, next) => {
         data: { seatsAvailable: { decrement: 1 } },
       });
 
-      await tx.notification.create({
+      const acceptedNotification = await tx.notification.create({
         data: {
           userId: request.passengerId,
           message: `Your ride request for ${request.travelPost.from} to ${request.travelPost.to} has been accepted. Driver: ${request.travelPost.user.name}, Phone: ${request.travelPost.user.phone}`,
@@ -160,8 +179,33 @@ const acceptRequest = async (req, res, next) => {
         }
       }
 
-      return { updatedPost, autoRejectedCount };
+      return { request, updatedPost, autoRejectedCount, acceptedNotification };
     });
+
+    emitToUser(result.request.passenger.id, "notification:new", result.acceptedNotification);
+    emitToUser(result.request.passenger.id, "dashboard:refresh", { reason: "ride_accepted" });
+
+    emitToUser(result.request.passenger.id, "ride:accepted", {
+      requestId: Number(requestId),
+      travelPostId: result.request.travelPostId,
+      driver: {
+        id: result.request.travelPost.user.id,
+        name: result.request.travelPost.user.name,
+        phone: result.request.travelPost.user.phone,
+      },
+      post: {
+        from: result.request.travelPost.from,
+        to: result.request.travelPost.to,
+        time: result.request.travelPost.time,
+        vehicleType: result.request.travelPost.vehicleType,
+      },
+    });
+
+    emitToRide(result.request.travelPostId, "ride:updated", {
+      type: "request_accepted",
+      requestId: Number(requestId),
+    });
+    emitToUser(req.user.userId, "dashboard:refresh", { reason: "request_accepted" });
 
     res.json({
       success: true,
@@ -179,7 +223,7 @@ const rejectRequest = async (req, res, next) => {
     const requestId = Number(req.body.requestId);
     const request = await prisma.rideRequest.findUnique({
       where: { id: requestId },
-      include: { travelPost: true },
+      include: { passenger: { select: { id: true } }, travelPost: true },
     });
 
     if (!request) return res.status(404).json({ error: "Request not found" });
@@ -201,6 +245,12 @@ const rejectRequest = async (req, res, next) => {
       "/passenger",
       "RIDE_REJECTED"
     );
+
+    emitToUser(request.passenger.id, "ride:rejected", {
+      requestId: Number(requestId),
+      from: request.travelPost.from,
+      to: request.travelPost.to,
+    });
 
     res.json({ success: true, message: "Request rejected" });
   } catch (err) {
@@ -263,7 +313,7 @@ const deletePassengerRequest = async (req, res, next) => {
       return res.status(403).json({ error: "Not your request" });
     }
 
-    if (["accepted", "ongoing", "completed"].includes(request.status)) {
+    if ([...ACTIVE_RIDE_STATUSES, "completed"].includes(request.status)) {
       return res.status(400).json({
         error: "Cannot delete an active or completed ride. Use cancel instead.",
       });
@@ -280,6 +330,8 @@ const deletePassengerRequest = async (req, res, next) => {
       );
     }
 
+    emitToUser(request.travelPost.user.id, "dashboard:refresh", { reason: "request_deleted" });
+
     res.json({ success: true, message: "Request removed" });
   } catch (err) {
     next(err);
@@ -291,12 +343,26 @@ const startTrip = async (req, res, next) => {
     const travelPostId = Number(req.body.travelPostId);
     const post = await prisma.travelPost.findUnique({
       where: { id: travelPostId },
-      include: { rideRequests: { where: { status: "accepted" } } },
+      include: {
+        user: { select: { id: true, name: true, phone: true } },
+        rideRequests: {
+          where: { status: "accepted" },
+          include: { passenger: { select: { id: true } } },
+        },
+      },
     });
 
     if (!post) return res.status(404).json({ error: "Trip not found" });
     if (post.userId !== req.user.userId) return res.status(403).json({ error: "Not your trip" });
     if (post.status !== "scheduled") return res.status(400).json({ error: "Trip must be scheduled" });
+    const activeTrip = await prisma.travelPost.findFirst({
+      where: {
+        userId: req.user.userId,
+        id: { not: travelPostId },
+        status: { in: ["active", "pickup_done"] },
+      },
+    });
+    if (activeTrip) return res.status(400).json({ error: "Complete your active trip first" });
     if (post.rideRequests.length === 0) {
       return res.status(400).json({ error: "No accepted passengers to start this trip" });
     }
@@ -312,6 +378,17 @@ const startTrip = async (req, res, next) => {
         data: { status: "ongoing" },
       });
     });
+
+    for (const request of post.rideRequests) {
+      emitToUser(request.passenger.id, "ride:started", {
+        travelPostId,
+        from: post.from,
+        to: post.to,
+        driver: { name: post.user.name, phone: post.user.phone },
+      });
+    }
+    emitToRide(travelPostId, "ride:started", { travelPostId });
+    emitToUser(req.user.userId, "dashboard:refresh", { reason: "trip_started" });
 
     res.json({ success: true, message: "Trip started" });
   } catch (err) {
@@ -344,7 +421,7 @@ const markPickupDone = async (req, res, next) => {
       });
       await tx.rideRequest.updateMany({
         where: { travelPostId, status: "ongoing" },
-        data: { pickupConfirmed: true, pickedUpAt: now },
+        data: { status: "pickup_done", pickupConfirmed: true, pickedUpAt: now },
       });
     });
 
@@ -359,6 +436,17 @@ const markPickupDone = async (req, res, next) => {
       )
     );
 
+    for (const request of post.rideRequests) {
+      emitToUser(request.passenger.id, "ride:updated", {
+        type: "pickup_done",
+        travelPostId,
+        from: post.from,
+        to: post.to,
+      });
+    }
+    emitToRide(travelPostId, "ride:updated", { type: "pickup_done", travelPostId });
+    emitToUser(req.user.userId, "dashboard:refresh", { reason: "pickup_done" });
+
     res.json({ success: true, message: "Pickup confirmed" });
   } catch (err) {
     next(err);
@@ -372,7 +460,7 @@ const markDropDone = async (req, res, next) => {
       where: { id: travelPostId },
       include: {
         rideRequests: {
-          where: { status: "ongoing" },
+          where: { status: { in: ["ongoing", "pickup_done"] } },
           include: { passenger: { select: { id: true } } },
         },
         user: { select: { id: true, name: true } },
@@ -392,7 +480,7 @@ const markDropDone = async (req, res, next) => {
         data: { status: "completed", droppedAt: now, completedAt: now },
       });
       await tx.rideRequest.updateMany({
-        where: { travelPostId, status: "ongoing" },
+        where: { travelPostId, status: { in: ["ongoing", "pickup_done"] } },
         data: { status: "completed", dropConfirmed: true, droppedAt: now },
       });
     });
@@ -407,6 +495,16 @@ const markDropDone = async (req, res, next) => {
         )
       )
     );
+
+    for (const request of post.rideRequests) {
+      emitToUser(request.passenger.id, "ride:completed", {
+        travelPostId,
+        from: post.from,
+        to: post.to,
+      });
+    }
+    emitToRide(travelPostId, "ride:completed", { travelPostId });
+    emitToUser(req.user.userId, "dashboard:refresh", { reason: "trip_completed" });
 
     res.json({ success: true, message: "Drop confirmed, trip completed" });
   } catch (err) {

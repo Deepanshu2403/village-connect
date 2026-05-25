@@ -3,6 +3,9 @@ const {
   createTravelPost,
   getTravelPosts,
   getTravelPostById,
+  searchPlaces,
+  reverseGeocode,
+  calculateRoute,
 } = require("../controllers/travelController");
 const auth = require("../middleware/authMiddleware");
 const asyncHandler = require("../middleware/asyncHandler");
@@ -10,6 +13,9 @@ const asyncHandler = require("../middleware/asyncHandler");
 const router = express.Router();
 
 router.get("/", asyncHandler(getTravelPosts));
+router.get("/search-places", asyncHandler(searchPlaces));
+router.get("/reverse-geocode", asyncHandler(reverseGeocode));
+router.get("/route", asyncHandler(calculateRoute));
 router.get("/:id", auth, asyncHandler(getTravelPostById));
 router.post("/", auth, asyncHandler(createTravelPost));
 

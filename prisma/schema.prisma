@@ -23,6 +23,7 @@ model User {
   rideRequests       RideRequest[]
   goodsRequests      GoodsRequest[]
   goodsMatchesDriven GoodsMatch[]   @relation("DriverGoodsMatches")
+  driverLocation     DriverLocation? @relation("DriverLocation")
 
   sentMessages     Message[] @relation("SenderMessages")
   receivedMessages Message[] @relation("ReceiverMessages")
@@ -46,6 +47,15 @@ model TravelPost {
   toLat Float?
   toLng Float?
 
+  pickupLat Float?
+  pickupLng Float?
+
+  dropLat Float?
+  dropLng Float?
+
+  distanceKm        Float?
+  estimatedDuration Int?
+
   time DateTime
 
   seatsAvailable Int
@@ -56,6 +66,7 @@ model TravelPost {
 
   vehicleType String
   status      String @default("scheduled")
+  estimatedFare Float?
 
   userId Int
 
@@ -162,4 +173,14 @@ model Rating {
   createdAt DateTime @default(now())
 
   @@unique([raterId, travelPostId])
+}
+
+model DriverLocation {
+  id           Int      @id @default(autoincrement())
+  driverId     Int      @unique
+  lat          Float
+  lng          Float
+  travelPostId Int?
+  updatedAt    DateTime @updatedAt
+  driver       User     @relation("DriverLocation", fields: [driverId], references: [id])
 }

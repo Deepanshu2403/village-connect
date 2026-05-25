@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+button,
+a,
+[role="button"] {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+}
+
 @keyframes pulse-ring {
   0% {
     transform: scale(0.8);

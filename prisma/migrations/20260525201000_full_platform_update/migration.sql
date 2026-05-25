@@ -1,0 +1,1 @@
+ALTER TABLE "TravelPost" ADD COLUMN "estimatedFare" DOUBLE PRECISION;

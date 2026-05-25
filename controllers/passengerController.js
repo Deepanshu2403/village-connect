@@ -36,7 +36,7 @@ const getPassengerDashboard = async (req, res, next) => {
     const [activeRide, confirmedRides, pendingRides, goodsRequests, rides] =
       await Promise.all([
         prisma.rideRequest.findFirst({
-          where: { passengerId, status: "ongoing" },
+          where: { passengerId, status: { in: ["ongoing", "pickup_done"] } },
           include: rideInclude,
           orderBy: { createdAt: "desc" },
         }),

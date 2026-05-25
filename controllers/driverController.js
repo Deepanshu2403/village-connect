@@ -47,7 +47,7 @@ const getDriverDashboard = async (req, res, next) => {
       },
       include: {
         rideRequests: {
-          where: { status: "ongoing" },
+          where: { status: { in: ["ongoing", "pickup_done"] } },
           include: {
             passenger: {
               select: { id: true, name: true, phone: true, rating: true },
@@ -76,7 +76,7 @@ const getDriverDashboard = async (req, res, next) => {
       orderBy: { completedAt: "desc" },
     });
 
-    const [totalCompleted, totalPassengers] = await Promise.all([
+    const [totalCompleted, totalPassengers, openGoodsRequests] = await Promise.all([
       prisma.travelPost.count({
         where: { userId: driverId, status: "completed" },
       }),
@@ -85,6 +85,16 @@ const getDriverDashboard = async (req, res, next) => {
           status: "completed",
           travelPost: { userId: driverId },
         },
+      }),
+      prisma.goodsRequest.findMany({
+        where: { status: "pending" },
+        include: {
+          requester: {
+            select: { id: true, name: true, phone: true, rating: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
       }),
     ]);
 
@@ -102,6 +112,7 @@ const getDriverDashboard = async (req, res, next) => {
       activePost,
       scheduledPosts,
       todayCompleted: todayCompleted.map(withTripStats),
+      openGoodsRequests,
       stats: {
         totalCompleted,
         totalPassengers,

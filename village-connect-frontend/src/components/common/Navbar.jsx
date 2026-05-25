@@ -3,6 +3,7 @@ import { ArrowRight, Bell, History, LogOut, Menu, Package, Route, UserRound, X }
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getNotifications, markNotificationRead } from "../../api/notificationApi";
 import { useAuth } from "../../context/AuthContext";
+import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import { initials } from "../../utils/format";
 import { timeAgo } from "../../utils/timeAgo";
@@ -23,6 +24,7 @@ const links = {
 
 export default function Navbar() {
   const { user, logout } = useAuth();
+  const { on, off } = useSocket() || {};
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -51,6 +53,20 @@ export default function Navbar() {
     const intervalId = window.setInterval(fetchNotifications, 30000);
     return () => window.clearInterval(intervalId);
   }, [fetchNotifications]);
+
+  useEffect(() => {
+    if (!on || !off) return undefined;
+
+    const handleNewNotification = (notification) => {
+      setNotifications((current) => {
+        if (current.some((item) => item.id === notification.id)) return current;
+        return [notification, ...current];
+      });
+    };
+
+    on("notification:new", handleNewNotification);
+    return () => off("notification:new", handleNewNotification);
+  }, [off, on]);
 
   useEffect(() => {
     const handleOutsideClick = (event) => {
@@ -125,6 +141,13 @@ export default function Navbar() {
               {label}
             </NavLink>
           ))}
+          <button
+            type="button"
+            onClick={handleLogout}
+            className="w-full border-t border-gray-100 px-4 py-3 text-left text-sm font-semibold text-red-500 md:hidden"
+          >
+            Logout
+          </button>
         </div>
 
         <div className="ml-auto flex items-center gap-2">
@@ -147,7 +170,7 @@ export default function Navbar() {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 mt-3 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-gray-100">
+              <div className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100vh-100px)] w-[min(320px,calc(100vw-32px))] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-xl">
                 <div className="flex items-center justify-between border-b border-gray-100 p-4">
                   <div>
                     <h3 className="font-bold text-gray-900">Notifications</h3>
@@ -161,7 +184,7 @@ export default function Navbar() {
                     View all
                   </Link>
                 </div>
-                <div className="max-h-96 overflow-y-auto">
+                <div>
                   {loadingNotifications && notifications.length === 0 ? (
                     <div className="p-4 text-sm font-semibold text-gray-500">Loading...</div>
                   ) : notifications.length === 0 ? (
@@ -205,7 +228,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={handleLogout}
-            className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:border-orange-400 hover:text-orange-600 sm:flex"
+            className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:border-orange-400 hover:text-orange-600 md:flex"
           >
             <LogOut className="h-4 w-4" />
             Logout
