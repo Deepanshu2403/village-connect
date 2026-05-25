@@ -8,14 +8,15 @@ const {
   clearAllNotifications,
   clearReadNotifications,
 } = require("../controllers/notificationController");
+const asyncHandler = require("../middleware/asyncHandler");
 
 const router = express.Router();
 
-router.get("/", auth, getNotifications);
-router.put("/read", auth, markOneRead);
-router.put("/read-all", auth, markAllRead);
-router.delete("/clear-all", auth, clearAllNotifications);
-router.delete("/clear-read", auth, clearReadNotifications);
-router.delete("/:id", auth, deleteNotification);
+router.get("/", auth, asyncHandler(getNotifications));
+router.put("/read", auth, asyncHandler(markOneRead));
+router.put("/read-all", auth, asyncHandler(markAllRead));
+router.delete("/clear-all", auth, asyncHandler(clearAllNotifications));
+router.delete("/clear-read", auth, asyncHandler(clearReadNotifications));
+router.delete("/:id", auth, asyncHandler(deleteNotification));
 
 module.exports = router;

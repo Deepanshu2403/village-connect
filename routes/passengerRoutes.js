@@ -6,8 +6,9 @@ const {
   getPassengerDashboard,
   getPassengerTripHistory,
 } = require("../controllers/passengerController");
+const asyncHandler = require("../middleware/asyncHandler");
 
-router.get("/dashboard", auth, getPassengerDashboard);
-router.get("/history", auth, getPassengerTripHistory);
+router.get("/dashboard", auth, asyncHandler(getPassengerDashboard));
+router.get("/history", auth, asyncHandler(getPassengerTripHistory));
 
 module.exports = router;

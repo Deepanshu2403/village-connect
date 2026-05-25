@@ -11,13 +11,14 @@ const {
   cancelGoodsRequest,
 } = require("../controllers/goodsController");
 const auth = require("../middleware/authMiddleware");
+const asyncHandler = require("../middleware/asyncHandler");
 
-router.post("/", auth, createGoodsRequest);
-router.get("/", auth, getGoodsRequests);
-router.put("/:id/accept", auth, acceptGoodsRequest);
-router.put("/:id/purchased", auth, markGoodsPurchased);
-router.put("/:id/in-transit", auth, markGoodsInTransit);
-router.put("/:id/delivered", auth, markGoodsDelivered);
-router.put("/:id/cancel", auth, cancelGoodsRequest);
+router.post("/", auth, asyncHandler(createGoodsRequest));
+router.get("/", auth, asyncHandler(getGoodsRequests));
+router.put("/:id/accept", auth, asyncHandler(acceptGoodsRequest));
+router.put("/:id/purchased", auth, asyncHandler(markGoodsPurchased));
+router.put("/:id/in-transit", auth, asyncHandler(markGoodsInTransit));
+router.put("/:id/delivered", auth, asyncHandler(markGoodsDelivered));
+router.put("/:id/cancel", auth, asyncHandler(cancelGoodsRequest));
 
 module.exports = router;

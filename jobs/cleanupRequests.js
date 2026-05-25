@@ -1,7 +1,27 @@
 const cron = require("node-cron");
 const prisma = require("../config/db");
 
+let isRunning = false;
+
+const log = (message, meta = {}) => {
+  console.log("[CRON cleanupRequests]", message, meta);
+};
+
+const logError = (message, err) => {
+  console.error("[CRON cleanupRequests]", message, {
+    error: err.message,
+    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+  });
+};
+
 const cleanupExpiredRideRequests = async () => {
+  if (isRunning) {
+    log("Skipped overlapping run");
+    return { skipped: true };
+  }
+
+  isRunning = true;
+  const startedAt = Date.now();
   const cutoff = new Date(Date.now() - 15 * 60 * 1000);
 
   try {
@@ -17,8 +37,8 @@ const cleanupExpiredRideRequests = async () => {
     });
 
     if (expiredRequests.length === 0) {
-      console.log("[cleanupRequests] No expired ride requests found");
-      return;
+      log("Completed", { expired: 0, durationMs: Date.now() - startedAt });
+      return { expired: 0 };
     }
 
     await prisma.$transaction(
@@ -38,12 +58,32 @@ const cleanupExpiredRideRequests = async () => {
       ])
     );
 
-    console.log(`[cleanupRequests] Expired ${expiredRequests.length} ride request(s)`);
-  } catch (error) {
-    console.error("[cleanupRequests] Failed:", error.message);
+    log("Completed", {
+      expired: expiredRequests.length,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return { expired: expiredRequests.length };
+  } catch (err) {
+    logError("Run failed", err);
+    return { error: err.message };
+  } finally {
+    isRunning = false;
   }
 };
 
-cron.schedule("0 * * * *", cleanupExpiredRideRequests);
+const registerCleanupRequestsJob = () => {
+  const task = cron.schedule("0 * * * *", () => {
+    cleanupExpiredRideRequests().catch((err) => {
+      logError("Unhandled run failure", err);
+    });
+  });
 
-module.exports = cleanupExpiredRideRequests;
+  log("Registered", { schedule: "0 * * * *" });
+  return task;
+};
+
+module.exports = {
+  cleanupExpiredRideRequests,
+  registerCleanupRequestsJob,
+};

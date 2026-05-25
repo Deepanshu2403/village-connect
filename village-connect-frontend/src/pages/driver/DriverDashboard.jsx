@@ -1,12 +1,39 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
+import {
+  Check,
+  Clock,
+  Loader2,
+  MapPin,
+  Package,
+  Phone,
+  Plus,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import { getDriverDashboard } from "../../api/dashboardApi";
-import { acceptRideRequest, markDropDone, markPickupDone, rejectRideRequest, startTrip } from "../../api/rideApi";
+import {
+  acceptRideRequest,
+  deleteRideRequest,
+  markDropDone,
+  markPickupDone,
+  rejectRideRequest,
+  startTrip,
+} from "../../api/rideApi";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
+import { timeAgo } from "../../utils/timeAgo";
+
+const getTimeOfDay = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return "morning";
+  if (hour < 17) return "afternoon";
+  return "evening";
+};
 
 export default function DriverDashboard() {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { addToast } = useToast();
   const [data, setData] = useState({
@@ -50,9 +77,14 @@ export default function DriverDashboard() {
       if (action === "accept") {
         await acceptRideRequest(requestId);
         addToast("Ride request accepted", "success");
-      } else {
+      }
+      if (action === "reject") {
         await rejectRideRequest(requestId);
         addToast("Ride request rejected", "info");
+      }
+      if (action === "delete") {
+        await deleteRideRequest(requestId);
+        addToast("Ride request removed", "info");
       }
       await fetchDashboard(true);
     } catch (err) {
@@ -140,19 +172,35 @@ export default function DriverDashboard() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-5">
-        <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-orange-600">Driver dashboard</p>
-          <div className="mt-1 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-extrabold text-gray-900">Hello, {user?.name}</h1>
-              <p className="text-sm text-gray-500">
-                {stats.pendingCount || 0} pending requests, {stats.scheduledCount || 0} scheduled trips
-              </p>
+        <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-5 text-white">
+          <div className="absolute inset-0 rounded-2xl bg-orange-500 opacity-5" />
+          <div className="relative z-10">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                  Good {getTimeOfDay()}
+                </p>
+                <h1 className="mt-0.5 text-xl font-extrabold">{user?.name}</h1>
+              </div>
+              <div className="rounded-xl bg-white/10 px-3 py-1.5">
+                <p className="flex items-center gap-1 text-xs text-gray-300">
+                  <Star className="h-3.5 w-3.5 fill-orange-300 text-orange-300" />
+                  {user?.rating ? Number(user.rating).toFixed(1) : "New"}
+                </p>
+              </div>
             </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              <StatTile label="Scheduled" value={stats.scheduledCount || 0} />
+              <StatTile label="Pending" value={stats.pendingCount || 0} highlight />
+              <StatTile label="Completed" value={stats.totalCompleted || 0} />
+            </div>
+
             <Link
               to="/create-travel"
-              className="inline-flex justify-center rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white hover:bg-orange-600"
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-5 py-3 text-sm font-bold text-white transition hover:bg-orange-600 sm:w-auto"
             >
+              <Plus className="h-4 w-4" />
               Post Travel
             </Link>
           </div>
@@ -168,9 +216,17 @@ export default function DriverDashboard() {
         )}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <h2 className="mb-4 text-base font-bold text-gray-900">Pending Requests</h2>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">Pending Requests</h2>
+            <StatusBadge tone="amber">{pendingRequests.length}</StatusBadge>
+          </div>
           {pendingRequests.length === 0 ? (
-            <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">No pending requests.</p>
+            <EmptyState
+              title="No pending requests"
+              text="New ride requests will appear here as soon as passengers ask to join."
+              action="Review trips"
+              to="/driver"
+            />
           ) : (
             <div className="space-y-3">
               {pendingRequests.map((request) => (
@@ -188,22 +244,24 @@ export default function DriverDashboard() {
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold text-gray-900">Scheduled Trips</h2>
-            <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-bold text-gray-600">
-              {scheduledPosts.length}
-            </span>
+            <StatusBadge>{scheduledPosts.length}</StatusBadge>
           </div>
           {scheduledPosts.length === 0 ? (
-            <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
-              No future scheduled trips.
-            </p>
+            <EmptyState
+              title="No future trips"
+              text="Post a travel plan so nearby passengers can request seats."
+              action="Post Travel"
+              to="/create-travel"
+            />
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
               {scheduledPosts.map((post) => (
                 <ScheduledTripCard
                   key={post.id}
                   post={post}
                   tripActionLoading={tripActionLoading}
                   onStartTrip={handleStartTrip}
+                  onOpen={() => navigate(`/travel/${post.id}`)}
                 />
               ))}
             </div>
@@ -211,84 +269,51 @@ export default function DriverDashboard() {
         </section>
 
         {todayCompleted.length > 0 && (
-          <div className="rounded-2xl bg-white shadow-sm p-5">
-            <h2 className="text-base font-bold text-gray-900 mb-4">Completed Today</h2>
-            <div className="space-y-3">
-              {todayCompleted.map((trip) => {
-                const duration = trip.durationMinutes;
-                const pickupTime = trip.pickedUpAt
-                  ? new Date(trip.pickedUpAt).toLocaleTimeString("en-IN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : null;
-                const dropTime = trip.droppedAt
-                  ? new Date(trip.droppedAt).toLocaleTimeString("en-IN", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : null;
-
-                return (
-                  <div key={trip.id} className="rounded-xl bg-green-50 border border-green-100 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-bold text-gray-900">
-                          {trip.from} to {trip.to}
-                        </p>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          {pickupTime && (
-                            <span className="text-xs text-gray-600">
-                              Picked up: <strong>{pickupTime}</strong>
-                            </span>
-                          )}
-                          {dropTime && (
-                            <span className="text-xs text-gray-600">
-                              Dropped: <strong>{dropTime}</strong>
-                            </span>
-                          )}
-                          {duration && (
-                            <span className="text-xs text-gray-600">
-                              Duration: <strong>{duration} min</strong>
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {trip.completedPassengers} passenger{trip.completedPassengers !== 1 ? "s" : ""} completed
-                        </p>
-                      </div>
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full font-semibold flex-shrink-0">
-                        Done
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">Completed Today</h2>
+              <Link to="/history" className="text-sm font-semibold text-orange-500 hover:text-orange-600">
+                View history
+              </Link>
             </div>
-            <Link
-              to="/history"
-              className="block text-center text-sm text-orange-500 hover:text-orange-600 font-semibold mt-4 transition-colors"
-            >
-              View full trip history
-            </Link>
-          </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              {todayCompleted.map((trip) => (
+                <CompletedTripCard key={trip.id} trip={trip} />
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </main>
   );
 }
 
+function StatTile({ label, value, highlight = false }) {
+  return (
+    <div
+      className={`rounded-xl p-3 text-center ${
+        highlight ? "border border-orange-500/30 bg-orange-500/30" : "bg-white/10"
+      }`}
+    >
+      <p className={`text-2xl font-extrabold ${highlight ? "text-orange-300" : "text-white"}`}>
+        {value}
+      </p>
+      <p className="mt-0.5 text-xs text-gray-400">{label}</p>
+    </div>
+  );
+}
+
 function ActiveTripCard({ post, tripActionLoading, onPickupDone, onDropDone }) {
   return (
-    <section className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5">
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
       <div className="mb-3 flex items-center gap-2">
         <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-500" />
         <span className="text-sm font-extrabold uppercase tracking-wide text-blue-800">
           Trip In Progress
         </span>
       </div>
-      <p className="text-lg font-extrabold text-gray-900">{post.from} to {post.to}</p>
-      <p className="mt-1 text-sm text-gray-500">
+      <RouteBlock from={post.from} to={post.to} />
+      <p className="mt-3 text-sm text-gray-500">
         {post.rideRequests?.length || 0} ongoing passenger{post.rideRequests?.length === 1 ? "" : "s"}
       </p>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -313,92 +338,235 @@ function ActiveTripCard({ post, tripActionLoading, onPickupDone, onDropDone }) {
           </button>
         )}
       </div>
-      {post.status === "pickup_done" && (
-        <p className="mt-3 rounded-xl bg-yellow-50 px-4 py-3 text-xs font-semibold text-yellow-800">
-          Pickup is confirmed. Complete drop after passengers reach the destination.
-        </p>
-      )}
     </section>
   );
 }
 
 function RequestCard({ request, actionLoading, onAction }) {
+  const passenger = request.passenger;
+  const isBusy = Boolean(actionLoading);
+
   return (
-    <article className="rounded-xl border border-gray-200 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-bold text-gray-900">{request.passenger?.name || "Passenger"}</p>
-          <p className="text-xs text-gray-500">{request.passenger?.phone}</p>
-          <p className="mt-1 text-xs font-semibold text-gray-700">
-            {request.travelPost.from} to {request.travelPost.to}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            disabled={Boolean(actionLoading)}
-            onClick={() => onAction(request.id, "accept")}
-            className="rounded-xl bg-orange-500 px-4 py-2 text-xs font-bold text-white hover:bg-orange-600 disabled:opacity-60"
-          >
-            {actionLoading === `accept-${request.id}` ? "Accepting..." : "Accept"}
-          </button>
-          <button
-            type="button"
-            disabled={Boolean(actionLoading)}
-            onClick={() => onAction(request.id, "reject")}
-            className="rounded-xl bg-red-50 px-4 py-2 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-60"
-          >
-            {actionLoading === `reject-${request.id}` ? "Rejecting..." : "Reject"}
-          </button>
-        </div>
+    <article className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 transition-colors hover:border-orange-300">
+      <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-sm font-bold text-white">
+        {passenger?.name?.charAt(0)?.toUpperCase() || "P"}
       </div>
-    </article>
-  );
-}
 
-function ScheduledTripCard({ post, tripActionLoading, onStartTrip }) {
-  const acceptedCount = (post.rideRequests || []).filter((request) => request.status === "accepted").length;
-  const pendingCount = (post.rideRequests || []).filter((request) =>
-    ["pending", "requested"].includes(request.status)
-  ).length;
-
-  return (
-    <article className="rounded-xl border border-gray-200 p-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-sm font-bold text-gray-900">{post.from} to {post.to}</p>
-          <p className="text-xs text-gray-500">
-            {new Date(post.time).toLocaleString("en-IN", {
-              day: "numeric",
-              month: "short",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Badge>{post.vehicleType}</Badge>
-            <Badge>{post.seatsAvailable} seats left</Badge>
-            {acceptedCount > 0 && <Badge>{acceptedCount} accepted</Badge>}
-            {pendingCount > 0 && <Badge>{pendingCount} pending</Badge>}
-          </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="truncate text-sm font-bold text-gray-900">{passenger?.name || "Passenger"}</p>
+          {passenger?.rating > 0 && (
+            <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-xs text-amber-600">
+              {Number(passenger.rating).toFixed(1)}
+            </span>
+          )}
         </div>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+          <Phone className="h-3 w-3" />
+          {passenger?.phone || "Phone unavailable"}
+        </p>
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <RoutePill>{request.travelPost?.from}</RoutePill>
+          <span className="text-xs text-orange-400">to</span>
+          <RoutePill>{request.travelPost?.to}</RoutePill>
+        </div>
+        <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
+          <Clock className="h-3 w-3" />
+          {new Date(request.travelPost?.time).toLocaleString("en-IN", {
+            day: "numeric",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+          <span>Requested {timeAgo(request.createdAt)}</span>
+        </p>
+      </div>
+
+      <div className="flex flex-shrink-0 flex-col gap-1.5">
         <button
           type="button"
-          disabled={acceptedCount === 0 || tripActionLoading === `start-${post.id}`}
-          onClick={() => onStartTrip(post.id)}
-          className="rounded-xl bg-blue-500 px-4 py-3 text-sm font-bold text-white hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+          onClick={() => onAction(request.id, "accept")}
+          disabled={isBusy}
+          className="flex min-w-[76px] items-center justify-center gap-1 rounded-lg bg-green-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-green-600 disabled:opacity-60"
         >
-          {tripActionLoading === `start-${post.id}` ? "Starting..." : "Start Trip"}
+          {actionLoading === `accept-${request.id}` ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Check className="h-3.5 w-3.5" />
+              Accept
+            </>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction(request.id, "reject")}
+          disabled={isBusy}
+          className="flex items-center justify-center gap-1 rounded-lg bg-red-50 px-3 py-2 text-xs font-bold text-red-600 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-60"
+        >
+          <X className="h-3.5 w-3.5" />
+          Reject
+        </button>
+        <button
+          type="button"
+          onClick={() => onAction(request.id, "delete")}
+          disabled={isBusy}
+          className="flex items-center justify-center rounded-lg bg-gray-100 px-3 py-2 text-xs font-bold text-gray-500 transition-colors hover:bg-gray-200 disabled:opacity-60"
+          aria-label="Delete request"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
       </div>
     </article>
   );
 }
 
-function Badge({ children }) {
+function ScheduledTripCard({ post, tripActionLoading, onStartTrip, onOpen }) {
+  const acceptedCount = (post.rideRequests || []).filter((request) => request.status === "accepted").length;
+  const pendingCount = (post.rideRequests || []).filter((request) =>
+    ["pending", "requested"].includes(request.status)
+  ).length;
+  const hasAccepted = acceptedCount > 0;
+
   return (
-    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+    <article
+      className="cursor-pointer rounded-2xl border border-gray-100 bg-white p-4 transition-all hover:border-orange-200 hover:shadow-md"
+      onClick={onOpen}
+    >
+      <div className="mb-3 flex items-start justify-between gap-2">
+        <RouteBlock from={post.from} to={post.to} compact />
+        <div className="flex flex-col items-end gap-1.5">
+          <StatusBadge>{post.vehicleType}</StatusBadge>
+          <span className="text-xs text-gray-400">{post.seatsAvailable} seats left</span>
+        </div>
+      </div>
+
+      <p className="mb-3 flex items-center gap-1 text-xs text-gray-400">
+        <Clock className="h-3.5 w-3.5" />
+        {new Date(post.time).toLocaleString("en-IN", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+          hour: "2-digit",
+          minute: "2-digit",
+        })}
+      </p>
+
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        {pendingCount > 0 && <StatusBadge tone="amber">{pendingCount} pending</StatusBadge>}
+        {acceptedCount > 0 && <StatusBadge tone="green">{acceptedCount} confirmed</StatusBadge>}
+        {pendingCount === 0 && acceptedCount === 0 && <StatusBadge>No requests yet</StatusBadge>}
+        {post.canCarryGoods && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600">
+            <Package className="h-3 w-3" />
+            Goods
+          </span>
+        )}
+      </div>
+
+      <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+        <button
+          type="button"
+          onClick={() => onStartTrip(post.id)}
+          disabled={!hasAccepted || tripActionLoading === `start-${post.id}`}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-500 py-2.5 text-xs font-bold text-white transition-colors hover:bg-blue-600 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {tripActionLoading === `start-${post.id}` ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            "Start Trip"
+          )}
+        </button>
+      </div>
+    </article>
+  );
+}
+
+function CompletedTripCard({ trip }) {
+  return (
+    <article className="rounded-xl border border-green-100 bg-green-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-bold text-gray-900">
+            {trip.from} to {trip.to}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            {trip.pickedUpAt && (
+              <span className="text-xs text-gray-600">
+                Pickup {new Date(trip.pickedUpAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            {trip.droppedAt && (
+              <span className="text-xs text-gray-600">
+                Drop {new Date(trip.droppedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+            {trip.durationMinutes && (
+              <span className="text-xs text-gray-600">{trip.durationMinutes} min</span>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-gray-500">
+            {trip.completedPassengers} passenger{trip.completedPassengers !== 1 ? "s" : ""} completed
+          </p>
+        </div>
+        <StatusBadge tone="green">Done</StatusBadge>
+      </div>
+    </article>
+  );
+}
+
+function RouteBlock({ from, to, compact = false }) {
+  return (
+    <div className={`flex items-start gap-2 ${compact ? "" : "text-lg"}`}>
+      <div className="mt-1 flex flex-col items-center gap-1.5">
+        <MapPin className="h-3.5 w-3.5 text-green-500" />
+        <div className="h-3 w-px bg-gray-300" />
+        <MapPin className="h-3.5 w-3.5 text-red-500" />
+      </div>
+      <div className="min-w-0 space-y-2">
+        <p className="truncate text-sm font-bold text-gray-900">{from}</p>
+        <p className="truncate text-sm font-bold text-gray-900">{to}</p>
+      </div>
+    </div>
+  );
+}
+
+function RoutePill({ children }) {
+  return (
+    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-medium text-orange-700">
+      {children || "Unknown"}
+    </span>
+  );
+}
+
+function StatusBadge({ children, tone = "gray" }) {
+  const tones = {
+    gray: "bg-gray-100 text-gray-600",
+    amber: "bg-amber-100 text-amber-700",
+    green: "bg-green-100 text-green-700",
+  };
+
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
       {children}
     </span>
+  );
+}
+
+function EmptyState({ title, text, action, to }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
+      <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-orange-500">
+        <Clock className="h-5 w-5" />
+      </div>
+      <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+      <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">{text}</p>
+      <Link
+        to={to}
+        className="mt-4 inline-flex rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600"
+      >
+        {action}
+      </Link>
+    </div>
   );
 }

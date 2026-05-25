@@ -10,16 +10,17 @@ const {
   markDropDone,
 } = require("../controllers/requestController");
 const auth = require("../middleware/authMiddleware");
+const asyncHandler = require("../middleware/asyncHandler");
 
 const router = express.Router();
 
-router.post("/", auth, requestRide);
-router.put("/accept", auth, acceptRequest);
-router.put("/reject", auth, rejectRequest);
-router.put("/start-trip", auth, startTrip);
-router.put("/pickup-done", auth, markPickupDone);
-router.put("/drop-done", auth, markDropDone);
-router.delete("/:requestId/delete", auth, deletePassengerRequest);
-router.delete("/:requestId", auth, deleteRequest);
+router.post("/", auth, asyncHandler(requestRide));
+router.put("/accept", auth, asyncHandler(acceptRequest));
+router.put("/reject", auth, asyncHandler(rejectRequest));
+router.put("/start-trip", auth, asyncHandler(startTrip));
+router.put("/pickup-done", auth, asyncHandler(markPickupDone));
+router.put("/drop-done", auth, asyncHandler(markDropDone));
+router.delete("/:requestId/delete", auth, asyncHandler(deletePassengerRequest));
+router.delete("/:requestId", auth, asyncHandler(deleteRequest));
 
 module.exports = router;

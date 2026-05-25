@@ -1,6 +1,17 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import {
+  CheckCircle,
+  Clock,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Package,
+  Phone,
+  Search,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { deletePassengerRequest } from "../../api/rideApi";
 import { useAuth } from "../../context/AuthContext";
@@ -64,6 +75,7 @@ export default function PassengerDashboard() {
   const activeRide = dashData.activeRide || null;
   const confirmedRide = dashData.confirmedRides?.[0] || null;
   const pendingRides = dashData.pendingRides || [];
+  const goodsRequests = dashData.goodsRequests || [];
   const completedRide = dashData.recentlyCompleted || null;
 
   if (loading) {
@@ -95,23 +107,34 @@ export default function PassengerDashboard() {
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl space-y-5">
         <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <p className="text-sm font-semibold text-orange-600">Passenger dashboard</p>
-          <h1 className="mt-1 text-2xl font-extrabold text-gray-900">
-            Hello, {user?.name}
-          </h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-orange-600">
+            Passenger dashboard
+          </p>
+          <div className="mt-1 flex items-start justify-between gap-4">
+            <div>
+              <h1 className="text-2xl font-extrabold text-gray-900">Hello, {user?.name}</h1>
+              <p className="mt-1 text-sm text-gray-500">
+                {pendingRides.length} pending rides, {goodsRequests.length} goods requests
+              </p>
+            </div>
+            <StatusBadge tone="orange">
+              <Star className="h-3 w-3" />
+              {user?.rating ? Number(user.rating).toFixed(1) : "New"}
+            </StatusBadge>
+          </div>
         </section>
+
+        <QuickActions />
 
         {activeRide && <ActiveRideCard ride={activeRide} />}
         {!activeRide && confirmedRide && <ConfirmedRideCard ride={confirmedRide} />}
         {completedRide && <CompletedRideCard ride={completedRide} />}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
+          <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-bold text-gray-900">Pending Requests</h2>
-              <p className="text-sm text-gray-500">
-                Waiting for driver response.
-              </p>
+              <p className="text-sm text-gray-500">Waiting for driver response.</p>
             </div>
             <Link
               to="/home"
@@ -122,9 +145,13 @@ export default function PassengerDashboard() {
           </div>
 
           {pendingRides.length === 0 ? (
-            <p className="rounded-xl bg-gray-50 p-4 text-sm text-gray-500">
-              No pending requests.
-            </p>
+            <EmptyState
+              icon={<Search className="h-5 w-5" />}
+              title="No pending requests"
+              text="Browse available trips and request a seat when you find a good match."
+              action="Find Rides"
+              to="/home"
+            />
           ) : (
             <div className="space-y-3">
               {pendingRides.map((ride) => (
@@ -139,23 +166,52 @@ export default function PassengerDashboard() {
           )}
         </section>
 
-        {!activeRide && !confirmedRide && pendingRides.length === 0 && !completedRide && (
-          <div className="rounded-2xl bg-gray-50 border border-gray-200 p-10 text-center">
-            <div className="text-5xl mb-4">Bus</div>
-            <h3 className="text-base font-bold text-gray-800">No active rides</h3>
-            <p className="text-sm text-gray-500 mt-1 mb-4">
-              Find available rides near you and book a seat
-            </p>
-            <Link
-              to="/home"
-              className="inline-flex bg-orange-500 hover:bg-orange-600 text-white font-bold px-5 py-3 rounded-xl text-sm transition-colors"
-            >
-              Find Rides
-            </Link>
+        <section className="rounded-2xl bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-bold text-gray-900">Goods Requests</h2>
+            <StatusBadge>{goodsRequests.length}</StatusBadge>
           </div>
-        )}
+          {goodsRequests.length === 0 ? (
+            <EmptyState
+              icon={<Package className="h-5 w-5" />}
+              title="No goods requests"
+              text="Create a delivery request and drivers travelling that route can help."
+              action="Send Goods"
+              to="/create-goods"
+            />
+          ) : (
+            <div className="space-y-3">
+              {goodsRequests.slice(0, 4).map((request) => (
+                <GoodsRequestCard key={request.id} request={request} />
+              ))}
+            </div>
+          )}
+        </section>
       </div>
     </main>
+  );
+}
+
+function QuickActions() {
+  return (
+    <div className="grid grid-cols-2 gap-3">
+      <Link
+        to="/home"
+        className="rounded-2xl bg-gradient-to-br from-orange-500 to-amber-500 p-4 text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      >
+        <Search className="mb-3 h-8 w-8" />
+        <h3 className="text-sm font-extrabold">Find a Ride</h3>
+        <p className="mt-0.5 text-xs text-orange-100">Browse nearby trips</p>
+      </Link>
+      <Link
+        to="/create-goods"
+        className="rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 p-4 text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      >
+        <Package className="mb-3 h-8 w-8" />
+        <h3 className="text-sm font-extrabold">Send Goods</h3>
+        <p className="mt-0.5 text-xs text-blue-100">Request delivery</p>
+      </Link>
+    </div>
   );
 }
 
@@ -163,36 +219,19 @@ function ActiveRideCard({ ride }) {
   const driver = ride.travelPost?.user;
 
   return (
-    <div className="rounded-2xl border-2 border-blue-300 bg-blue-50 p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse" />
-        <span className="text-sm font-extrabold text-blue-800 uppercase tracking-wide">
+    <section className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-blue-500" />
+        <span className="text-sm font-extrabold uppercase tracking-wide text-blue-800">
           Ride In Progress
         </span>
       </div>
 
-      <div className="flex items-center gap-3 mb-4">
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-3 h-3 rounded-full bg-green-500" />
-          <div className="w-0.5 h-8 bg-gray-300" />
-          <div className="w-3 h-3 rounded-full bg-red-500" />
-        </div>
-        <div className="flex flex-col gap-3">
-          <div>
-            <p className="text-xs text-gray-500">Pickup</p>
-            <p className="text-sm font-bold text-gray-900">{ride.travelPost?.from}</p>
-          </div>
-          <div>
-            <p className="text-xs text-gray-500">Destination</p>
-            <p className="text-sm font-bold text-gray-900">{ride.travelPost?.to}</p>
-          </div>
-        </div>
-      </div>
-
+      <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} />
       <DriverContactCard driver={driver} vehicleType={ride.travelPost?.vehicleType} tone="blue" />
 
       {ride.pickupConfirmed && (
-        <div className="mt-3 bg-yellow-50 border border-yellow-200 rounded-xl px-4 py-3">
+        <div className="mt-3 rounded-xl border border-yellow-200 bg-yellow-50 px-4 py-3">
           <p className="text-xs font-semibold text-yellow-800">
             Picked up at{" "}
             {ride.pickedUpAt &&
@@ -203,7 +242,7 @@ function ActiveRideCard({ ride }) {
           </p>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -211,17 +250,18 @@ function ConfirmedRideCard({ ride }) {
   const driver = ride.travelPost?.user;
 
   return (
-    <div className="rounded-2xl border border-green-200 bg-green-50 p-5">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-2 h-2 rounded-full bg-green-500" />
-        <span className="text-sm font-bold text-green-800">Confirmed Ride</span>
+    <section className="rounded-2xl border border-green-200 bg-green-50 p-5">
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <StatusBadge tone="green">
+          <CheckCircle className="h-3 w-3" />
+          Confirmed
+        </StatusBadge>
+        <span className="text-xs font-medium text-gray-500">{ride.travelPost?.vehicleType}</span>
       </div>
 
-      <h3 className="text-base font-extrabold text-gray-900 mb-1">
-        {ride.travelPost?.from} to {ride.travelPost?.to}
-      </h3>
-      <p className="text-sm text-gray-500 mb-3">
-        Departing{" "}
+      <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} />
+      <p className="mb-3 mt-3 flex items-center gap-1 text-sm text-gray-500">
+        <Clock className="h-4 w-4" />
         {new Date(ride.travelPost?.time).toLocaleString("en-IN", {
           weekday: "short",
           day: "numeric",
@@ -231,29 +271,8 @@ function ConfirmedRideCard({ ride }) {
         })}
       </p>
 
-      <div className="bg-white rounded-xl border border-green-100 p-4 mb-3">
-        <p className="text-xs text-gray-500 mb-2 font-semibold uppercase tracking-wide">
-          Your Driver
-        </p>
-        <div className="flex items-center justify-between gap-3">
-          <DriverIdentity driver={driver} vehicleType={ride.travelPost?.vehicleType} />
-          <div className="flex flex-col gap-2">
-            <a
-              href={`tel:${driver?.phone}`}
-              className="bg-green-500 text-white text-xs font-bold px-3 py-2 rounded-xl"
-            >
-              Call
-            </a>
-            <Link
-              to={`/chat/${driver?.id}`}
-              className="bg-blue-50 text-blue-600 border border-blue-200 text-xs font-bold px-3 py-2 rounded-xl text-center"
-            >
-              Chat
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
+      <DriverContactCard driver={driver} vehicleType={ride.travelPost?.vehicleType} tone="green" />
+    </section>
   );
 }
 
@@ -261,14 +280,14 @@ function CompletedRideCard({ ride }) {
   const driver = ride.travelPost?.user;
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-green-500 text-lg">Done</span>
-        <h3 className="text-base font-bold text-gray-900">Trip Completed!</h3>
+    <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <div className="mb-4 flex items-center gap-2">
+        <CheckCircle className="h-5 w-5 text-green-500" />
+        <h3 className="text-base font-bold text-gray-900">Trip Completed</h3>
       </div>
 
-      <div className="bg-gray-50 rounded-xl p-4 mb-4">
-        <p className="text-sm font-bold text-gray-900 mb-2">
+      <div className="mb-4 rounded-xl bg-gray-50 p-4">
+        <p className="mb-2 text-sm font-bold text-gray-900">
           {ride.travelPost?.from} to {ride.travelPost?.to}
         </p>
         {ride.pickedUpAt && (
@@ -277,24 +296,22 @@ function CompletedRideCard({ ride }) {
           </p>
         )}
         {ride.droppedAt && (
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="mt-0.5 text-xs text-gray-500">
             Dropped: {new Date(ride.droppedAt).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
           </p>
         )}
         {ride.durationMinutes && (
-          <p className="text-xs text-gray-500 mt-0.5">Duration: {ride.durationMinutes} minutes</p>
+          <p className="mt-0.5 text-xs text-gray-500">Duration: {ride.durationMinutes} minutes</p>
         )}
       </div>
 
-      <div className="flex items-center gap-3 mb-4 p-3 bg-orange-50 rounded-xl border border-orange-100">
+      <div className="mb-4 flex items-center gap-3 rounded-xl border border-orange-100 bg-orange-50 p-3">
         <DriverAvatar name={driver?.name} />
         <div className="flex-1">
           <p className="text-sm font-bold text-gray-900">{driver?.name}</p>
           <p className="text-xs text-gray-500">{ride.travelPost?.vehicleType}</p>
           {driver?.rating > 0 && (
-            <p className="text-xs text-yellow-600">
-              Current rating: {Number(driver.rating).toFixed(1)}
-            </p>
+            <p className="text-xs text-yellow-600">Current rating: {Number(driver.rating).toFixed(1)}</p>
           )}
         </div>
       </div>
@@ -302,37 +319,34 @@ function CompletedRideCard({ ride }) {
       {!ride.hasRated ? (
         <Link
           to={`/rate/${driver?.id}/${ride.travelPost?.id}`}
-          className="block w-full text-center bg-orange-500 hover:bg-orange-600 text-white font-bold py-3 rounded-xl text-sm transition-colors"
+          className="block w-full rounded-xl bg-orange-500 py-3 text-center text-sm font-bold text-white transition-colors hover:bg-orange-600"
         >
           Rate Your Experience
         </Link>
       ) : (
-        <div className="text-center py-3 bg-green-50 rounded-xl border border-green-100">
+        <div className="rounded-xl border border-green-100 bg-green-50 py-3 text-center">
           <p className="text-sm font-semibold text-green-700">You rated this trip</p>
         </div>
       )}
 
       <Link
         to="/history"
-        className="block text-center text-sm text-gray-500 hover:text-orange-500 mt-3 transition-colors"
+        className="mt-3 block text-center text-sm text-gray-500 transition-colors hover:text-orange-500"
       >
         View trip history
       </Link>
-    </div>
+    </section>
   );
 }
 
 function PendingRideCard({ ride, deletingId, onDelete }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-4 flex items-start justify-between gap-3">
-      <div>
-        <p className="text-sm font-bold text-gray-900">
-          {ride.travelPost?.from} to {ride.travelPost?.to}
-        </p>
-        <p className="text-xs text-gray-500 mt-0.5">
-          Driver: {ride.travelPost?.user?.name}
-        </p>
-        <p className="text-xs text-gray-500 mt-0.5">
+    <article className="flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
+      <div className="min-w-0">
+        <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} compact />
+        <p className="mt-2 text-xs text-gray-500">Driver: {ride.travelPost?.user?.name}</p>
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500">
+          <Clock className="h-3 w-3" />
           {new Date(ride.travelPost?.time).toLocaleString("en-IN", {
             day: "numeric",
             month: "short",
@@ -342,28 +356,54 @@ function PendingRideCard({ ride, deletingId, onDelete }) {
         </p>
         <ExpiryCountdown expiresAt={ride.expiresAt} />
       </div>
-      <div className="flex flex-col gap-2 flex-shrink-0">
-        <span className="text-xs bg-yellow-100 text-yellow-700 px-2 py-1 rounded-full font-semibold text-center">
-          Pending
-        </span>
+      <div className="flex flex-shrink-0 flex-col gap-2">
+        <StatusBadge tone="amber">Pending</StatusBadge>
         <button
           type="button"
           onClick={() => onDelete(ride.id)}
           disabled={deletingId === ride.id}
-          className="text-xs bg-red-50 hover:bg-red-500 hover:text-white text-red-500 px-3 py-1.5 rounded-lg transition-colors font-medium disabled:opacity-50 flex items-center gap-1 justify-center"
+          className="flex items-center justify-center gap-1 rounded-lg bg-red-50 px-3 py-1.5 text-xs font-medium text-red-500 transition-colors hover:bg-red-500 hover:text-white disabled:opacity-50"
         >
           {deletingId === ride.id ? (
-            <span className="w-3 h-3 border-2 border-red-400 border-t-transparent rounded-full animate-spin" />
-          ) : "Remove"}
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <>
+              <Trash2 className="h-3.5 w-3.5" />
+              Remove
+            </>
+          )}
         </button>
         <Link
           to={`/chat/${ride.travelPost?.user?.id}`}
-          className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 px-3 py-1.5 rounded-lg transition-colors text-center font-medium"
+          className="flex items-center justify-center gap-1 rounded-lg bg-blue-50 px-3 py-1.5 text-center text-xs font-medium text-blue-600 transition-colors hover:bg-blue-100"
         >
+          <MessageCircle className="h-3.5 w-3.5" />
           Chat
         </Link>
       </div>
-    </div>
+    </article>
+  );
+}
+
+function GoodsRequestCard({ request }) {
+  const activeMatch = request.matches?.[0];
+
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-gray-900">{request.item}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {request.from} to {request.to}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">{request.weightKg} kg</p>
+          {activeMatch?.driver && (
+            <p className="mt-2 text-xs font-medium text-blue-600">Driver: {activeMatch.driver.name}</p>
+          )}
+        </div>
+        <StatusBadge tone={request.status === "pending" ? "amber" : "green"}>{request.status}</StatusBadge>
+      </div>
+    </article>
   );
 }
 
@@ -390,32 +430,46 @@ function ExpiryCountdown({ expiresAt }) {
   }, [expiresAt]);
 
   return (
-    <p className={`text-xs mt-1 font-medium ${isUrgent ? "text-red-500" : "text-gray-400"}`}>
-      {isUrgent && "Soon: "}{timeLeft}
+    <p className={`mt-1 text-xs font-medium ${isUrgent ? "text-red-500" : "text-gray-400"}`}>
+      {isUrgent && "Soon: "}
+      {timeLeft}
     </p>
   );
 }
 
-function DriverContactCard({ driver, vehicleType }) {
+function DriverContactCard({ driver, vehicleType, tone = "blue" }) {
+  const toneClasses =
+    tone === "green" ? "border-green-100 bg-white" : "border-blue-100 bg-white";
+
   return (
-    <div className="bg-white rounded-xl border border-blue-100 p-4 flex items-center justify-between gap-3">
+    <div className={`mt-4 flex items-center justify-between gap-3 rounded-xl border p-4 ${toneClasses}`}>
       <DriverIdentity driver={driver} vehicleType={vehicleType} />
-      <a
-        href={`tel:${driver?.phone}`}
-        className="bg-green-500 hover:bg-green-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl transition-colors"
-      >
-        Call
-      </a>
+      <div className="flex flex-col gap-2">
+        <a
+          href={`tel:${driver?.phone}`}
+          className="flex items-center justify-center gap-1 rounded-xl bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600"
+        >
+          <Phone className="h-3.5 w-3.5" />
+          Call
+        </a>
+        <Link
+          to={`/chat/${driver?.id}`}
+          className="flex items-center justify-center gap-1 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-center text-xs font-bold text-blue-600"
+        >
+          <MessageCircle className="h-3.5 w-3.5" />
+          Chat
+        </Link>
+      </div>
     </div>
   );
 }
 
 function DriverIdentity({ driver, vehicleType }) {
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <DriverAvatar name={driver?.name} />
-      <div>
-        <p className="text-sm font-bold text-gray-900">{driver?.name}</p>
+      <div className="min-w-0">
+        <p className="truncate text-sm font-bold text-gray-900">{driver?.name}</p>
         <p className="text-xs text-gray-500">{vehicleType}</p>
         {driver?.rating > 0 && (
           <p className="text-xs text-yellow-600">
@@ -430,8 +484,57 @@ function DriverIdentity({ driver, vehicleType }) {
 
 function DriverAvatar({ name }) {
   return (
-    <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-sm font-bold text-white">
       {name?.charAt(0)?.toUpperCase() || "D"}
+    </div>
+  );
+}
+
+function RouteBlock({ from, to, compact = false }) {
+  return (
+    <div className={`flex items-start gap-2 ${compact ? "" : "mb-1"}`}>
+      <div className="mt-1 flex flex-col items-center gap-1.5">
+        <MapPin className="h-3.5 w-3.5 text-green-500" />
+        <div className="h-3 w-px bg-gray-300" />
+        <MapPin className="h-3.5 w-3.5 text-red-500" />
+      </div>
+      <div className="min-w-0 space-y-2">
+        <p className="truncate text-sm font-bold text-gray-900">{from}</p>
+        <p className="truncate text-sm font-bold text-gray-900">{to}</p>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ children, tone = "gray" }) {
+  const tones = {
+    gray: "bg-gray-100 text-gray-600",
+    amber: "bg-amber-100 text-amber-700",
+    green: "bg-green-100 text-green-700",
+    orange: "bg-orange-100 text-orange-700",
+  };
+
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function EmptyState({ icon, title, text, action, to }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-gray-50 p-6 text-center">
+      <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-full bg-white text-orange-500">
+        {icon}
+      </div>
+      <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+      <p className="mx-auto mt-1 max-w-md text-sm text-gray-500">{text}</p>
+      <Link
+        to={to}
+        className="mt-4 inline-flex rounded-xl bg-orange-500 px-4 py-2.5 text-sm font-bold text-white hover:bg-orange-600"
+      >
+        {action}
+      </Link>
     </div>
   );
 }

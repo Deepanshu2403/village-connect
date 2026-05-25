@@ -21,10 +21,6 @@ export default function NotificationsPage() {
   const [clearLoading, setClearLoading] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
-
   const fetchNotifications = async () => {
     try {
       const res = await getNotifications();
@@ -35,6 +31,10 @@ export default function NotificationsPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
 
   const handleClick = async (notif) => {
     if (!notif.isRead) {

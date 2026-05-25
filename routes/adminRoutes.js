@@ -7,13 +7,14 @@ const {
   getAllTrips,
   getStats,
 } = require("../controllers/adminController");
+const asyncHandler = require("../middleware/asyncHandler");
 
 const router = express.Router();
 
 router.use(auth, admin);
-router.get("/users", getAllUsers);
-router.put("/users/:id/suspend", suspendUser);
-router.get("/trips", getAllTrips);
-router.get("/stats", getStats);
+router.get("/users", asyncHandler(getAllUsers));
+router.put("/users/:id/suspend", asyncHandler(suspendUser));
+router.get("/trips", asyncHandler(getAllTrips));
+router.get("/stats", asyncHandler(getStats));
 
 module.exports = router;

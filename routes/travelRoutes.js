@@ -5,11 +5,12 @@ const {
   getTravelPostById,
 } = require("../controllers/travelController");
 const auth = require("../middleware/authMiddleware");
+const asyncHandler = require("../middleware/asyncHandler");
 
 const router = express.Router();
 
-router.get("/", getTravelPosts);
-router.get("/:id", auth, getTravelPostById);
-router.post("/", auth, createTravelPost);
+router.get("/", asyncHandler(getTravelPosts));
+router.get("/:id", auth, asyncHandler(getTravelPostById));
+router.post("/", auth, asyncHandler(createTravelPost));
 
 module.exports = router;

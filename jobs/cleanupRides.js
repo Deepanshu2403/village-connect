@@ -2,7 +2,40 @@ const cron = require("node-cron");
 const prisma = require("../config/db");
 const createNotification = require("../utils/createNotification");
 
+let isRunning = false;
+
+const log = (message, meta = {}) => {
+  console.log("[CRON cleanupRides]", message, meta);
+};
+
+const logError = (message, err) => {
+  console.error("[CRON cleanupRides]", message, {
+    error: err.message,
+    stack: process.env.NODE_ENV === "production" ? undefined : err.stack,
+  });
+};
+
+const notifyPassengers = async (rideRequests, messageBuilder, link, type) => {
+  const results = await Promise.allSettled(
+    rideRequests.map((request) =>
+      createNotification(request.passenger.id, messageBuilder(request), link, type)
+    )
+  );
+
+  const failed = results.filter((result) => result.status === "rejected").length;
+  if (failed > 0) {
+    log("Notification failures ignored", { failed });
+  }
+};
+
 const cleanupRides = async () => {
+  if (isRunning) {
+    log("Skipped overlapping run");
+    return { skipped: true };
+  }
+
+  isRunning = true;
+  const startedAt = Date.now();
   const now = new Date();
   const expiredTripCutoff = new Date(now.getTime() - 30 * 60 * 1000);
   const fifteenMinsAgo = new Date(now.getTime() - 15 * 60 * 1000);
@@ -33,15 +66,12 @@ const cleanupRides = async () => {
         }),
       ]);
 
-      await Promise.all(
-        post.rideRequests.map((request) =>
-          createNotification(
-            request.passenger.id,
-            `Your ride request for ${post.from} to ${post.to} expired because the trip departure time passed.`,
-            "/home",
-            "RIDE_EXPIRED"
-          )
-        )
+      await notifyPassengers(
+        post.rideRequests,
+        () =>
+          `Your ride request for ${post.from} to ${post.to} expired because the trip departure time passed.`,
+        "/home",
+        "RIDE_EXPIRED"
       );
     }
 
@@ -73,16 +103,36 @@ const cleanupRides = async () => {
       );
     }
 
-    if (expiredPosts.length || stalePending.length) {
-      console.log(
-        `[cleanupRides] Expired ${expiredPosts.length} trip(s), ${stalePending.length} stale request(s)`
-      );
-    }
-  } catch (error) {
-    console.error("[cleanupRides] Failed:", error.message);
+    log("Completed", {
+      expiredTrips: expiredPosts.length,
+      staleRequests: stalePending.length,
+      durationMs: Date.now() - startedAt,
+    });
+
+    return {
+      expiredTrips: expiredPosts.length,
+      staleRequests: stalePending.length,
+    };
+  } catch (err) {
+    logError("Run failed", err);
+    return { error: err.message };
+  } finally {
+    isRunning = false;
   }
 };
 
-cron.schedule("*/30 * * * *", cleanupRides);
+const registerCleanupRidesJob = () => {
+  const task = cron.schedule("*/30 * * * *", () => {
+    cleanupRides().catch((err) => {
+      logError("Unhandled run failure", err);
+    });
+  });
 
-module.exports = cleanupRides;
+  log("Registered", { schedule: "*/30 * * * *" });
+  return task;
+};
+
+module.exports = {
+  cleanupRides,
+  registerCleanupRidesJob,
+};

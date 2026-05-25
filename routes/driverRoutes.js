@@ -8,13 +8,14 @@ const {
   acceptRideRequest,
   rejectRideRequest
 } = require("../controllers/driverController");
+const asyncHandler = require("../middleware/asyncHandler");
 
 // Dashboard
-router.get("/dashboard", auth, getDriverDashboard);
-router.get("/history", auth, getDriverTripHistory);
+router.get("/dashboard", auth, asyncHandler(getDriverDashboard));
+router.get("/history", auth, asyncHandler(getDriverTripHistory));
 
 // Actions
-router.put("/accept", auth, acceptRideRequest);
-router.put("/reject", auth, rejectRideRequest);
+router.put("/accept", auth, asyncHandler(acceptRideRequest));
+router.put("/reject", auth, asyncHandler(rejectRideRequest));
 
 module.exports = router;
