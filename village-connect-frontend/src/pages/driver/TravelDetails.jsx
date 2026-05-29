@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, MessageCircle, Star, Trash2 } from "lucide-react";
+import { MessageCircle, Star, Trash2 } from "lucide-react";
 import { getTravelById } from "../../api/travelApi";
 import { acceptRideRequest, deleteRideRequest, rejectRideRequest } from "../../api/rideApi";
+import BackButton from "../../components/common/BackButton";
 import { useToast } from "../../context/ToastContext";
 import { formatDateTime, initials, statusLabel } from "../../utils/format";
 
@@ -130,14 +131,9 @@ export default function TravelDetails() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl">
-        <button
-          type="button"
-          onClick={() => navigate("/driver")}
-          className="mb-4 inline-flex items-center gap-2 rounded-xl border border-gray-200 px-4 py-2 font-semibold text-gray-700 hover:border-orange-400"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
+        <div className="pb-4 pt-2">
+          <BackButton label="Back to Dashboard" to="/driver" />
+        </div>
 
         <section className="rounded-3xl bg-gray-900 p-6 text-white shadow-md sm:p-8">
           <p className="font-semibold text-orange-300">Trip details</p>

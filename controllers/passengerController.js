@@ -33,7 +33,7 @@ const getPassengerDashboard = async (req, res, next) => {
   try {
     const passengerId = req.user.userId;
 
-    const [activeRide, confirmedRides, pendingRides, goodsRequests, rides] =
+    const [activeRide, confirmedRides, pendingRides, goodsRequests, activeGoodsMatches, rides] =
       await Promise.all([
         prisma.rideRequest.findFirst({
           where: { passengerId, status: { in: ["ongoing", "pickup_done"] } },
@@ -69,6 +69,30 @@ const getPassengerDashboard = async (req, res, next) => {
           },
           orderBy: { createdAt: "desc" },
         }),
+        prisma.goodsMatch.findMany({
+          where: {
+            goodsRequest: { requesterId: passengerId },
+            status: { in: ["accepted", "picked_up"] },
+          },
+          include: {
+            goodsRequest: true,
+            driver: {
+              select: { id: true, name: true, phone: true, rating: true },
+            },
+            travelPost: {
+              select: {
+                id: true,
+                from: true,
+                to: true,
+                fromLat: true,
+                fromLng: true,
+                toLat: true,
+                toLng: true,
+              },
+            },
+          },
+          orderBy: { createdAt: "desc" },
+        }).catch(() => []),
         prisma.rideRequest.findMany({
           where: { passengerId },
           include: rideInclude,
@@ -107,6 +131,7 @@ const getPassengerDashboard = async (req, res, next) => {
       confirmedRides,
       pendingRides: pendingRides.map(withExpiresAt),
       goodsRequests,
+      activeGoodsMatches,
       recentlyCompleted: recentlyCompletedWithRating,
       rides: rides.map((ride) => withExpiresAt(withDuration(ride))),
       goods: goodsRequests,

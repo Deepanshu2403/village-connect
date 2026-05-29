@@ -7,14 +7,14 @@ const register = async (req, res, next) => {
     const { name, phone, password, role } = req.body;
 
     if (!name || !phone || !password) {
-      return res.status(400).json({ error: "Name, phone, and password are required" });
+      return res.status(400).json({ error: "Name, phone and password are required" });
     }
 
     const cleanPhone = phone.toString().trim();
     const cleanName = name.toString().trim();
 
     if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
-      return res.status(400).json({ error: "Enter a valid 10-digit Indian mobile number" });
+      return res.status(400).json({ error: "Enter a valid 10-digit mobile number" });
     }
 
     if (cleanName.length < 2) {
@@ -27,6 +27,22 @@ const register = async (req, res, next) => {
 
     const validRoles = ["driver", "passenger"];
     const userRole = validRoles.includes(role) ? role : "passenger";
+
+    const otpRecord = await prisma.otpVerification.findFirst({
+      where: {
+        phone: cleanPhone,
+        purpose: "signup",
+        verified: true,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        error: "Phone number not verified. Please verify OTP before registering.",
+      });
+    }
 
     const existing = await prisma.user.findUnique({
       where: { phone: cleanPhone },
@@ -47,6 +63,10 @@ const register = async (req, res, next) => {
       },
     });
 
+    await prisma.otpVerification.deleteMany({
+      where: { phone: cleanPhone, purpose: "signup" },
+    });
+
     res.status(201).json({
       success: true,
       message: "Account created successfully",
@@ -57,6 +77,60 @@ const register = async (req, res, next) => {
         role: user.role,
       },
     });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const resetPassword = async (req, res, next) => {
+  try {
+    const { phone, newPassword } = req.body;
+    const cleanPhone = phone?.toString().trim();
+
+    if (!cleanPhone || !newPassword) {
+      return res.status(400).json({ error: "Phone and new password required" });
+    }
+
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return res.status(400).json({ error: "Enter a valid 10-digit mobile number" });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: "Password must be at least 6 characters" });
+    }
+
+    const otpRecord = await prisma.otpVerification.findFirst({
+      where: {
+        phone: cleanPhone,
+        purpose: "forgot_password",
+        verified: true,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({
+        error: "OTP not verified. Please verify your phone number first.",
+      });
+    }
+
+    const user = await prisma.user.findUnique({ where: { phone: cleanPhone } });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({
+      where: { phone: cleanPhone },
+      data: { password: hashedPassword },
+    });
+
+    await prisma.otpVerification.deleteMany({
+      where: { phone: cleanPhone, purpose: "forgot_password" },
+    });
+
+    res.json({ success: true, message: "Password reset successfully. Please login." });
   } catch (err) {
     next(err);
   }
@@ -148,4 +222,4 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, getMe };
+module.exports = { register, login, getMe, resetPassword };

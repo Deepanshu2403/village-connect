@@ -4,6 +4,7 @@ import { MapContainer, Marker, TileLayer, useMapEvents } from "react-leaflet";
 import { createTravel } from "../../api/travelApi";
 import { getDriverDashboard } from "../../api/dashboardApi";
 import { calculateRoute } from "../../api/locationApi";
+import BackButton from "../../components/common/BackButton";
 import LocationSearch from "../../components/location/LocationSearch";
 import { useToast } from "../../context/ToastContext";
 
@@ -163,6 +164,9 @@ export default function CreateTravel() {
   return (
     <main className="min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
       <div className="mx-auto max-w-5xl">
+        <div className="pb-4 pt-2">
+          <BackButton label="Back to Dashboard" to="/driver" />
+        </div>
         <div className="mb-4 md:mb-6">
           <p className="text-sm font-semibold text-orange-600">Driver tools</p>
           <h1 className="mt-1 text-lg font-extrabold text-gray-950 md:text-xl">
@@ -202,8 +206,8 @@ export default function CreateTravel() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <LocationSearch
-                  label="From (Village / Town)"
-                  placeholder="Rampur Village, Bus Stand"
+                  label="From"
+                  placeholder="e.g. Sector 12, Bathinda"
                   value={fromLocation}
                   onChange={setFromLocation}
                   onCoordinatesChange={(coords) =>
@@ -211,8 +215,8 @@ export default function CreateTravel() {
                   }
                 />
                 <LocationSearch
-                  label="To (Village / Town)"
-                  placeholder="City Market, Main Chowk"
+                  label="To"
+                  placeholder="e.g. Bus Stand, Patiala"
                   value={toLocation}
                   onChange={setToLocation}
                   onCoordinatesChange={(coords) =>

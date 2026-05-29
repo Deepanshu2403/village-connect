@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import API from "../../api/client";
 import { giveRating } from "../../api/ratingApi";
 import { getTravelById } from "../../api/travelApi";
+import BackButton from "../../components/common/BackButton";
 import { useToast } from "../../context/ToastContext";
 
 export default function RatePage() {
@@ -71,6 +72,9 @@ export default function RatePage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <form onSubmit={handleSubmit} className="mx-auto max-w-md rounded-2xl bg-white p-6 shadow-md">
+        <div className="pb-4 pt-2">
+          <BackButton label="Back" to="/passenger" />
+        </div>
         <h1 className="text-2xl font-extrabold text-gray-950">Rate your trip</h1>
 
         {tripDetails && (

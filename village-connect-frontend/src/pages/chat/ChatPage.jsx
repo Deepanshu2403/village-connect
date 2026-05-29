@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Send } from "lucide-react";
 import { getChat, sendMessage } from "../../api/chatApi";
+import BackButton from "../../components/common/BackButton";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
@@ -93,7 +94,12 @@ export default function ChatPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
-      <div className="mx-auto flex h-[calc(100vh-7rem)] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-md">
+      <div className="mx-auto max-w-4xl">
+        <div className="pb-4 pt-2">
+          <BackButton label="Back" />
+        </div>
+      </div>
+      <div className="mx-auto flex h-[calc(100vh-10rem)] max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-md">
         <header className="border-b border-gray-100 p-5">
           <p className="text-sm font-semibold text-orange-600">Chat</p>
           <h1 className="text-2xl font-extrabold text-gray-950">

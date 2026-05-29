@@ -185,19 +185,83 @@ const searchPlaces = async (req, res, next) => {
       return res.json({ success: true, results: placeSearchCache.get(cacheKey) });
     }
 
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=8&countrycodes=in`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
-        "Accept-Language": "en,hi",
-      },
-    });
+    const headers = {
+      "User-Agent": "VillageConnect/1.0 (rural-india-transport)",
+      "Accept-Language": "en,hi",
+    };
 
-    if (!response.ok) {
-      return res.status(502).json({ error: "Place search unavailable" });
+    const searches = await Promise.allSettled([
+      fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(query)}&` +
+          `format=json&addressdetails=1&limit=10&countrycodes=in&featuretype=settlement`,
+        { headers }
+      ).then((response) => (response.ok ? response.json() : [])),
+      fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(`${query} India`)}&` +
+          `format=json&addressdetails=1&limit=8&countrycodes=in`,
+        { headers }
+      ).then((response) => (response.ok ? response.json() : [])),
+      fetch(
+        `https://nominatim.openstreetmap.org/search?` +
+          `q=${encodeURIComponent(query)}&` +
+          `format=json&addressdetails=1&limit=8&countrycodes=in&bounded=0`,
+        { headers }
+      ).then((response) => (response.ok ? response.json() : [])),
+    ]);
+
+    const allResults = [];
+    const seenCoordinates = new Set();
+
+    for (const result of searches) {
+      if (result.status !== "fulfilled" || !Array.isArray(result.value)) continue;
+      for (const item of result.value) {
+        const key = `${item.lat}-${item.lon}`;
+        if (seenCoordinates.has(key)) continue;
+        seenCoordinates.add(key);
+        allResults.push(item);
+      }
     }
 
-    const results = mapNominatimResults(await response.json());
+    const results = allResults
+      .map((item) => {
+        const addr = item.address || {};
+        const primaryName =
+          addr.village ||
+          addr.hamlet ||
+          addr.suburb ||
+          addr.neighbourhood ||
+          addr.town ||
+          addr.city ||
+          addr.county ||
+          item.display_name?.split(",")[0];
+
+        const parts = [
+          addr.village || addr.hamlet || addr.town || addr.city || addr.suburb,
+          addr.county || addr.state_district,
+          addr.state,
+        ].filter(Boolean);
+
+        const shortAddress = [...new Set(parts)].join(", ");
+
+        return {
+          name: primaryName,
+          shortAddress,
+          fullAddress: item.display_name,
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+          type: item.type,
+          importance: item.importance || 0,
+        };
+      })
+      .filter((item) => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lng))
+      .sort((a, b) => b.importance - a.importance)
+      .filter(
+        (item, index, items) =>
+          items.findIndex((candidate) => candidate.shortAddress === item.shortAddress) === index
+      )
+      .slice(0, 8);
 
     placeSearchCache.set(cacheKey, results);
     res.json({ success: true, results });

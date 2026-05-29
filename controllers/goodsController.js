@@ -1,9 +1,15 @@
 const prisma = require("../config/db");
 const createNotification = require("../utils/createNotification");
 
+const toOptionalNumber = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const number = Number(value);
+  return Number.isNaN(number) ? null : number;
+};
+
 const createGoodsRequest = async (req, res, next) => {
   try {
-    const { item, from, to, weightKg, note } = req.body;
+    const { item, from, to, weightKg, note, fromLat, fromLng, toLat, toLng } = req.body;
 
     if (req.user.role !== "passenger") {
       return res.status(403).json({ error: "Only passengers can create goods requests" });
@@ -15,6 +21,22 @@ const createGoodsRequest = async (req, res, next) => {
       return res.status(400).json({ error: "Weight must be greater than 0" });
     }
 
+    let finalFromLat = toOptionalNumber(fromLat);
+    let finalFromLng = toOptionalNumber(fromLng);
+
+    if (finalFromLat === null || finalFromLng === null) {
+      const passengerLocation = await prisma.driverLocation
+        .findUnique({
+          where: { driverId: req.user.userId },
+        })
+        .catch(() => null);
+
+      if (passengerLocation) {
+        finalFromLat = passengerLocation.lat;
+        finalFromLng = passengerLocation.lng;
+      }
+    }
+
     const request = await prisma.goodsRequest.create({
       data: {
         item: String(item).trim(),
@@ -22,6 +44,10 @@ const createGoodsRequest = async (req, res, next) => {
         to: String(to).trim(),
         weightKg: Number(weightKg),
         note: note ? String(note).trim() : null,
+        fromLat: finalFromLat,
+        fromLng: finalFromLng,
+        toLat: toOptionalNumber(toLat),
+        toLng: toOptionalNumber(toLng),
         requesterId: req.user.userId,
         status: "pending",
       },

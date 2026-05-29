@@ -170,49 +170,69 @@ export default function Navbar() {
             </button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 max-h-[calc(100vh-100px)] w-[min(320px,calc(100vw-32px))] overflow-y-auto rounded-2xl border border-gray-200 bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-gray-100 p-4">
-                  <div>
-                    <h3 className="font-bold text-gray-900">Notifications</h3>
-                    <p className="text-xs text-gray-500">{unreadCount} unread</p>
-                  </div>
-                  <Link
-                    to="/notifications"
-                    onClick={() => setNotifOpen(false)}
-                    className="text-sm font-semibold text-orange-600 hover:text-orange-700"
-                  >
-                    View all
-                  </Link>
-                </div>
-                <div>
-                  {loadingNotifications && notifications.length === 0 ? (
-                    <div className="p-4 text-sm font-semibold text-gray-500">Loading...</div>
-                  ) : notifications.length === 0 ? (
-                    <div className="p-6 text-center text-sm text-gray-500">
-                      No notifications yet.
-                    </div>
-                  ) : (
-                    notifications.slice(0, 8).map((item) => (
+              <>
+                <div
+                  className="fixed inset-0 z-40 bg-black/20 md:hidden"
+                  onClick={() => setNotifOpen(false)}
+                />
+
+                <div className="fixed left-3 right-3 top-[68px] z-50 flex max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl md:left-auto md:right-4 md:top-[72px] md:w-[320px] md:max-h-[480px]">
+                  <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+                    <h3 className="text-sm font-bold text-gray-900">Notifications</h3>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 && (
+                        <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-600">
+                          {unreadCount} new
+                        </span>
+                      )}
                       <button
                         type="button"
-                        key={item.id}
-                        onClick={() => handleNotificationClick(item)}
-                        className={`w-full cursor-pointer border-b border-gray-100 p-4 text-left transition ${
-                          !item.isRead ? "bg-orange-50/60" : "bg-white"
-                        } ${item.link ? "hover:bg-orange-50" : ""}`}
+                        className="p-1 text-gray-400 hover:text-gray-600 md:hidden"
+                        onClick={() => setNotifOpen(false)}
                       >
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <p className="text-sm font-semibold text-gray-900">{item.message}</p>
-                            <p className="mt-1 text-xs text-gray-500">{timeAgo(item.createdAt)}</p>
-                          </div>
-                          {item.link && <ArrowRight className="mt-1 h-4 w-4 text-orange-500" />}
-                        </div>
+                        <X className="h-4 w-4" />
                       </button>
-                    ))
-                  )}
+                    </div>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto">
+                    {loadingNotifications && notifications.length === 0 ? (
+                      <div className="p-4 text-sm font-semibold text-gray-500">Loading...</div>
+                    ) : notifications.length === 0 ? (
+                      <div className="p-6 text-center text-sm text-gray-500">
+                        No notifications yet.
+                      </div>
+                    ) : (
+                      notifications.slice(0, 8).map((item) => (
+                        <button
+                          type="button"
+                          key={item.id}
+                          onClick={() => handleNotificationClick(item)}
+                          className={`w-full cursor-pointer border-b border-gray-100 p-4 text-left transition ${
+                            !item.isRead ? "bg-orange-50/60" : "bg-white"
+                          } ${item.link ? "hover:bg-orange-50" : ""}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1">
+                              <p className="text-sm font-semibold text-gray-900">{item.message}</p>
+                              <p className="mt-1 text-xs text-gray-500">{timeAgo(item.createdAt)}</p>
+                            </div>
+                            {item.link && <ArrowRight className="mt-1 h-4 w-4 text-orange-500" />}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+
+                  <Link
+                    to="/notifications"
+                    className="block flex-shrink-0 border-t border-gray-100 py-3 text-center text-sm font-semibold text-orange-500"
+                    onClick={() => setNotifOpen(false)}
+                  >
+                    View all notifications
+                  </Link>
                 </div>
-              </div>
+              </>
             )}
           </div>
 

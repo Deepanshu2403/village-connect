@@ -1,4 +1,5 @@
 const prisma = require("../config/db");
+const haversineKm = require("../utils/haversine");
 
 const withTripStats = (trip) => {
   const completedPassengers = (trip.rideRequests || []).filter(
@@ -76,7 +77,7 @@ const getDriverDashboard = async (req, res, next) => {
       orderBy: { completedAt: "desc" },
     });
 
-    const [totalCompleted, totalPassengers, openGoodsRequests] = await Promise.all([
+    const [totalCompleted, totalPassengers, driverLocationRecord, allGoodsRequests, activeGoodsMatches] = await Promise.all([
       prisma.travelPost.count({
         where: { userId: driverId, status: "completed" },
       }),
@@ -86,6 +87,9 @@ const getDriverDashboard = async (req, res, next) => {
           travelPost: { userId: driverId },
         },
       }),
+      prisma.driverLocation.findUnique({
+        where: { driverId },
+      }).catch(() => null),
       prisma.goodsRequest.findMany({
         where: { status: "pending" },
         include: {
@@ -94,9 +98,62 @@ const getDriverDashboard = async (req, res, next) => {
           },
         },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
+      }),
+      prisma.goodsMatch.findMany({
+        where: {
+          driverId,
+          status: { in: ["accepted", "picked_up"] },
+        },
+        include: {
+          goodsRequest: {
+            include: {
+              requester: { select: { id: true, name: true, phone: true, rating: true } },
+            },
+          },
+          travelPost: {
+            select: { id: true, from: true, to: true, fromLat: true, fromLng: true, toLat: true, toLng: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
       }),
     ]);
+
+    let relevantGoodsRequests = allGoodsRequests;
+
+    if (driverLocationRecord) {
+      const { lat: driverLat, lng: driverLng } = driverLocationRecord;
+
+      relevantGoodsRequests = allGoodsRequests
+        .filter((goods) => {
+          if (goods.fromLat !== null && goods.fromLng !== null) {
+            return haversineKm(driverLat, driverLng, goods.fromLat, goods.fromLng) <= 10;
+          }
+          return true;
+        })
+        .map((goods) => ({
+          ...goods,
+          distanceKm:
+            goods.fromLat !== null && goods.fromLng !== null
+              ? Math.round(haversineKm(driverLat, driverLng, goods.fromLat, goods.fromLng) * 10) / 10
+              : null,
+        }));
+    }
+
+    const routeMatchedGoods = relevantGoodsRequests.filter((goods) =>
+      scheduledPosts.some((post) => {
+        const goodsFrom = goods.from.toLowerCase();
+        const goodsTo = goods.to.toLowerCase();
+        const postFrom = post.from.toLowerCase();
+        const postTo = post.to.toLowerCase();
+        const fromMatch = goodsFrom.includes(postFrom) || postFrom.includes(goodsFrom);
+        const toMatch = goodsTo.includes(postTo) || postTo.includes(goodsTo);
+        return fromMatch || toMatch;
+      })
+    );
+
+    const openGoodsRequests =
+      routeMatchedGoods.length > 0 ? routeMatchedGoods : relevantGoodsRequests.slice(0, 10);
 
     const pendingCount = scheduledPosts.reduce(
       (count, post) =>
@@ -113,6 +170,7 @@ const getDriverDashboard = async (req, res, next) => {
       scheduledPosts,
       todayCompleted: todayCompleted.map(withTripStats),
       openGoodsRequests,
+      activeGoodsMatches,
       stats: {
         totalCompleted,
         totalPassengers,

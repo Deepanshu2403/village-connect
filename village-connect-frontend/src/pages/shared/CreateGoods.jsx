@@ -1,15 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { createGoodsRequest } from "../../api/goodsApi";
+import BackButton from "../../components/common/BackButton";
+import LocationSearch from "../../components/location/LocationSearch";
 import { useToast } from "../../context/ToastContext";
 
-const initialForm = { item: "", from: "", to: "", weightKg: "", note: "" };
+const initialForm = { item: "", weightKg: "", note: "" };
 const inputClass = "w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-orange-400";
 
 export default function CreateGoods() {
   const { addToast } = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState(initialForm);
+  const [fromLocation, setFromLocation] = useState({ name: "", lat: null, lng: null });
+  const [toLocation, setToLocation] = useState({ name: "", lat: null, lng: null });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -20,7 +24,7 @@ export default function CreateGoods() {
     if (loading) return;
     setError("");
 
-    if (!form.item.trim() || !form.from.trim() || !form.to.trim() || !form.weightKg) {
+    if (!form.item.trim() || !fromLocation.name.trim() || !toLocation.name.trim() || !form.weightKg) {
       setError("Item, from, to, and weight are required.");
       return;
     }
@@ -31,7 +35,17 @@ export default function CreateGoods() {
 
     setLoading(true);
     try {
-      await createGoodsRequest({ ...form, weightKg: Number(form.weightKg) });
+      await createGoodsRequest({
+        item: form.item,
+        from: fromLocation.name,
+        to: toLocation.name,
+        fromLat: fromLocation.lat,
+        fromLng: fromLocation.lng,
+        toLat: toLocation.lat,
+        toLng: toLocation.lng,
+        weightKg: Number(form.weightKg),
+        note: form.note,
+      });
       addToast("Goods request created successfully", "success");
       navigate("/passenger");
     } catch (err) {
@@ -46,6 +60,9 @@ export default function CreateGoods() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl">
+        <div className="pb-4 pt-2">
+          <BackButton label="Back to Dashboard" to="/passenger" />
+        </div>
         <div className="mb-6">
           <p className="font-semibold text-orange-600">Goods delivery</p>
           <h1 className="mt-2 text-3xl font-extrabold text-gray-950">Request parcel delivery</h1>
@@ -58,12 +75,25 @@ export default function CreateGoods() {
             <input value={form.item} onChange={(e) => update("item", e.target.value)} className={inputClass} placeholder="Seeds, documents, medicine..." />
           </Field>
           <div className="grid gap-4 md:grid-cols-2">
-            <Field label="From">
-              <input value={form.from} onChange={(e) => update("from", e.target.value)} className={inputClass} placeholder="Pickup village" />
-            </Field>
-            <Field label="To">
-              <input value={form.to} onChange={(e) => update("to", e.target.value)} className={inputClass} placeholder="Delivery village" />
-            </Field>
+            <LocationSearch
+              label="Pickup"
+              placeholder="Where to pick up?"
+              value={fromLocation}
+              onChange={setFromLocation}
+              onCoordinatesChange={(coords) =>
+                setFromLocation((current) => ({ ...current, ...coords }))
+              }
+            />
+            <LocationSearch
+              label="Drop"
+              placeholder="Where to deliver?"
+              value={toLocation}
+              onChange={setToLocation}
+              onCoordinatesChange={(coords) =>
+                setToLocation((current) => ({ ...current, ...coords }))
+              }
+              showCurrentLocation={false}
+            />
             <Field label="Weight (kg)">
               <input type="number" min="1" value={form.weightKg} onChange={(e) => update("weightKg", e.target.value)} className={inputClass} />
             </Field>

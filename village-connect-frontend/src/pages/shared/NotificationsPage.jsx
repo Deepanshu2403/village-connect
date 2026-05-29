@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Loader2, Trash2, CheckCheck, BellOff } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
+import BackButton from "../../components/common/BackButton";
 import {
   getNotifications,
   markNotificationRead,
@@ -142,6 +143,9 @@ export default function NotificationsPage() {
   return (
     <div className="min-h-screen bg-gray-50 pt-16">
       <div className="mx-auto max-w-2xl px-4 py-6">
+        <div className="pb-4 pt-2">
+          <BackButton label="Back" />
+        </div>
         <div className="flex items-start justify-between mb-4 gap-4">
           <div>
             <h1 className="text-xl font-extrabold text-gray-900">Notifications</h1>

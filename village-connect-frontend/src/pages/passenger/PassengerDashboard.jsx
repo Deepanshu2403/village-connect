@@ -14,24 +14,29 @@ import {
 } from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { deletePassengerRequest } from "../../api/rideApi";
+import ActiveGoodsCard from "../../components/passenger/ActiveGoodsCard";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
+import { useUserLocation } from "../../hooks/useUserLocation";
 
 export default function PassengerDashboard() {
   const { user } = useAuth();
   const { on, off } = useSocket() || {};
   const { addToast } = useToast();
+  const { location, locationName, locationLoading } = useUserLocation();
   const [dashData, setDashData] = useState({
     activeRide: null,
     confirmedRides: [],
     pendingRides: [],
     goodsRequests: [],
+    activeGoodsMatches: [],
     recentlyCompleted: null,
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
   const fetchDashboard = async (silent = false) => {
     if (!silent) setError("");
@@ -42,6 +47,7 @@ export default function PassengerDashboard() {
         confirmedRides: res.data.confirmedRides || [],
         pendingRides: res.data.pendingRides || [],
         goodsRequests: res.data.goodsRequests || [],
+        activeGoodsMatches: res.data.activeGoodsMatches || [],
         recentlyCompleted: res.data.recentlyCompleted || null,
       });
     } catch {
@@ -55,6 +61,15 @@ export default function PassengerDashboard() {
     fetchDashboard();
     const interval = window.setInterval(() => fetchDashboard(true), 20000);
     return () => window.clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    navigator.permissions
+      ?.query({ name: "geolocation" })
+      .then((result) => {
+        if (result.state === "prompt") setShowLocationPrompt(true);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -117,6 +132,7 @@ export default function PassengerDashboard() {
   const confirmedRide = dashData.confirmedRides?.[0] || null;
   const pendingRides = dashData.pendingRides || [];
   const goodsRequests = dashData.goodsRequests || [];
+  const activeGoodsMatches = dashData.activeGoodsMatches || [];
   const completedRide = dashData.recentlyCompleted || null;
 
   if (loading) {
@@ -165,11 +181,89 @@ export default function PassengerDashboard() {
           </div>
         </section>
 
+        {showLocationPrompt && !location && (
+          <div className="mb-4 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 p-4">
+            <MapPin className="h-6 w-6 flex-shrink-0 text-blue-500" />
+            <div className="flex-1">
+              <p className="text-sm font-bold text-gray-900">Enable location for better rides</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                We use your location to show nearby rides and help drivers find you.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.geolocation.getCurrentPosition(
+                    () => setShowLocationPrompt(false),
+                    () => setShowLocationPrompt(false)
+                  );
+                }}
+                className="mt-2 rounded-lg bg-blue-500 px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-blue-600"
+              >
+                Allow Location Access
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowLocationPrompt(false)}
+              className="flex-shrink-0 text-lg leading-none text-gray-400 hover:text-gray-600"
+            >
+              x
+            </button>
+          </div>
+        )}
+
+        <div className="mb-4 flex items-start gap-3">
+          <div className="flex flex-1 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
+            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
+              {locationLoading ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+              ) : (
+                <MapPin className={`h-4 w-4 ${location ? "text-blue-600" : "text-gray-400"}`} />
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-400">Your location</p>
+              <p className="truncate text-sm font-semibold text-gray-800">
+                {locationLoading
+                  ? "Detecting..."
+                  : locationName ||
+                    (location
+                      ? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}`
+                      : "Location not available")}
+              </p>
+            </div>
+            {!location && !locationLoading && (
+              <button
+                type="button"
+                onClick={() => window.location.reload()}
+                className="flex-shrink-0 text-xs font-medium text-blue-500 hover:text-blue-600"
+              >
+                Enable
+              </button>
+            )}
+          </div>
+        </div>
+
         <QuickActions />
 
         {activeRide && <ActiveRideCard ride={activeRide} />}
         {!activeRide && confirmedRide && <ConfirmedRideCard ride={confirmedRide} />}
         {completedRide && <CompletedRideCard ride={completedRide} />}
+
+        {activeGoodsMatches.length > 0 && (
+          <div className="mb-4">
+            <h2 className="mb-2 text-sm font-bold text-gray-700">Active Deliveries</h2>
+            <div className="space-y-3">
+              {activeGoodsMatches.map((match) => (
+                <ActiveGoodsCard
+                  key={match.id}
+                  match={match}
+                  onUpdate={() => fetchDashboard(true)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <div className="mb-4 flex items-center justify-between gap-3">

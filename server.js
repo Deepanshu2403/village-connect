@@ -19,6 +19,8 @@ const chatRoutes = require("./routes/chatRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const ratingRoutes = require("./routes/ratingRoutes");
 const adminRoutes = require("./routes/adminRoutes");
+const otpRoutes = require("./routes/otpRoutes");
+const locationRoutes = require("./routes/locationRoutes");
 const errorHandler = require("./middleware/errorMiddleware");
 
 const app = express();
@@ -189,12 +191,14 @@ app.get("/ready", async (req, res, next) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/otp", otpRoutes);
 app.use("/api/travel", travelRoutes);
 app.use("/api/request", requestRoutes);
 app.use("/api/goods", goodsRoutes);
 app.use("/api/driver", driverRoutes);
 app.use("/api/passenger", passengerRoutes);
 app.use("/api/goods-match", goodsMatchRoutes);
+app.use("/api/location", locationRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/ratings", ratingRoutes);

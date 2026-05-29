@@ -13,7 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { getDriverDashboard } from "../../api/dashboardApi";
-import { acceptGoodsDelivery } from "../../api/goodsApi";
+import { acceptGoodsDelivery, markGoodsDelivered, markGoodsPickup } from "../../api/goodsApi";
 import {
   acceptRideRequest,
   deleteRideRequest,
@@ -45,6 +45,7 @@ export default function DriverDashboard() {
     scheduledPosts: [],
     todayCompleted: [],
     openGoodsRequests: [],
+    activeGoodsMatches: [],
     stats: {},
   });
   const [loading, setLoading] = useState(true);
@@ -64,6 +65,7 @@ export default function DriverDashboard() {
         scheduledPosts: res.data.scheduledPosts || [],
         todayCompleted: res.data.todayCompleted || [],
         openGoodsRequests: res.data.openGoodsRequests || [],
+        activeGoodsMatches: res.data.activeGoodsMatches || [],
         stats: res.data.stats || {},
       });
     } catch {
@@ -183,6 +185,25 @@ export default function DriverDashboard() {
     }
   };
 
+  const handleGoodsStatus = async (matchId, action) => {
+    if (goodsActionLoading) return;
+    setGoodsActionLoading(`${action}-${matchId}`);
+    try {
+      if (action === "pickup") {
+        await markGoodsPickup(matchId);
+        addToast("Goods pickup marked", "success");
+      } else {
+        await markGoodsDelivered(matchId);
+        addToast("Goods delivered", "success");
+      }
+      await fetchDashboard(true);
+    } catch (err) {
+      addToast(err.response?.data?.error || "Could not update goods delivery", "error");
+    } finally {
+      setGoodsActionLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -208,7 +229,13 @@ export default function DriverDashboard() {
     );
   }
 
-  const { activePost, scheduledPosts = [], openGoodsRequests = [], stats = {} } = data || {};
+  const {
+    activePost,
+    scheduledPosts = [],
+    openGoodsRequests = [],
+    activeGoodsMatches = [],
+    stats = {},
+  } = data || {};
   const todayCompleted = data?.todayCompleted || [];
   const pendingRequests = scheduledPosts.flatMap((post) =>
     (post.rideRequests || [])
@@ -260,6 +287,28 @@ export default function DriverDashboard() {
             onPickupDone={handlePickupDone}
             onDropDone={handleDropDone}
           />
+        )}
+
+        {activeGoodsMatches.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <Package className="h-5 w-5 text-blue-500" />
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Active Goods Deliveries</h2>
+                <p className="text-xs text-gray-500">Update pickup and delivery status.</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {activeGoodsMatches.map((match) => (
+                <ActiveGoodsDeliveryCard
+                  key={match.id}
+                  match={match}
+                  actionLoading={goodsActionLoading}
+                  onStatus={handleGoodsStatus}
+                />
+              ))}
+            </div>
+          </section>
         )}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -532,6 +581,60 @@ function GoodsDeliveryRequestCard({ goods, loading, onAccept }) {
           </button>
           <Link
             to={`/chat/${goods.requester?.id}`}
+            className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-xs font-bold text-blue-600 transition-colors"
+          >
+            Chat
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ActiveGoodsDeliveryCard({ match, actionLoading, onStatus }) {
+  const request = match.goodsRequest;
+  const pickupLoading = actionLoading === `pickup-${match.id}`;
+  const deliveredLoading = actionLoading === `delivered-${match.id}`;
+  const isPickedUp = match.status === "picked_up";
+
+  return (
+    <article className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <StatusBadge tone={isPickedUp ? "green" : "amber"}>
+            {isPickedUp ? "Picked up" : "Accepted"}
+          </StatusBadge>
+          <h4 className="mt-2 text-sm font-bold text-gray-900">{request?.item}</h4>
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <RoutePill>{request?.from}</RoutePill>
+            <span className="text-xs text-blue-400">to</span>
+            <RoutePill>{request?.to}</RoutePill>
+          </div>
+          <p className="mt-1.5 text-xs text-gray-500">
+            {request?.weightKg}kg for {request?.requester?.name} ({request?.requester?.phone})
+          </p>
+        </div>
+        <div className="flex flex-shrink-0 gap-2 md:flex-col">
+          {!isPickedUp && (
+            <button
+              type="button"
+              onClick={() => onStatus(match.id, "pickup")}
+              disabled={Boolean(actionLoading)}
+              className="rounded-lg bg-blue-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-blue-600 disabled:opacity-60"
+            >
+              {pickupLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Picked Up"}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onStatus(match.id, "delivered")}
+            disabled={Boolean(actionLoading)}
+            className="rounded-lg bg-green-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-green-600 disabled:opacity-60"
+          >
+            {deliveredLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delivered"}
+          </button>
+          <Link
+            to={`/chat/${request?.requester?.id}`}
             className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-center text-xs font-bold text-blue-600 transition-colors"
           >
             Chat

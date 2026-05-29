@@ -109,6 +109,10 @@ model GoodsRequest {
   weightKg Float
   note     String?
   status   String  @default("pending")
+  fromLat  Float?
+  fromLng  Float?
+  toLat    Float?
+  toLng    Float?
 
   requesterId  Int
   requester    User @relation(fields: [requesterId], references: [id])
@@ -125,13 +129,27 @@ model GoodsMatch {
   goodsRequestId Int
   travelPostId   Int
   driverId       Int
-  status         String @default("requested")
+  status         String @default("accepted")
+  pickedUpAt     DateTime?
+  deliveredAt    DateTime?
 
   goodsRequest GoodsRequest @relation(fields: [goodsRequestId], references: [id])
   travelPost   TravelPost   @relation(fields: [travelPostId], references: [id])
   driver       User         @relation("DriverGoodsMatches", fields: [driverId], references: [id])
 
   createdAt DateTime @default(now())
+}
+
+model OtpVerification {
+  id        Int      @id @default(autoincrement())
+  phone     String
+  otp       String
+  purpose   String
+  verified  Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([phone, purpose])
 }
 
 model Message {

@@ -19,7 +19,7 @@ const RURAL_LANDMARKS = [
 
 export default function LocationSearch({
   label,
-  placeholder = "Enter village, town or landmark",
+  placeholder = "Enter location",
   value,
   onChange,
   onCoordinatesChange,
@@ -54,7 +54,7 @@ export default function LocationSearch({
     onChange?.({ name: nextValue, lat: null, lng: null });
 
     window.clearTimeout(debounceRef.current);
-    if (nextValue.length < 3) {
+    if (nextValue.length < 2) {
       setResults([]);
       setShowDropdown(nextValue.length > 0);
       return;
@@ -203,12 +203,17 @@ export default function LocationSearch({
                   key={`${place.fullAddress}-${index}`}
                   type="button"
                   onMouseDown={() => handleSelect(place)}
-                  className="w-full items-start gap-2 border-b border-gray-50 px-3 py-2.5 text-left text-sm last:border-0 hover:bg-orange-50"
+                  className="flex w-full items-start gap-2 border-b border-gray-50 px-3 py-3 text-left text-sm transition-colors last:border-0 hover:bg-orange-50"
                 >
-                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-                  <span>
-                    <span className="block font-medium text-gray-900">{place.name}</span>
-                    {place.fullAddress && (
+                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-400" />
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-gray-900">{place.name}</span>
+                    {place.shortAddress && (
+                      <span className="mt-0.5 block truncate text-xs text-gray-400">
+                        {place.shortAddress}
+                      </span>
+                    )}
+                    {!place.shortAddress && place.fullAddress && (
                       <span className="mt-0.5 line-clamp-1 block text-xs text-gray-400">
                         {place.fullAddress}
                       </span>

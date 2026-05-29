@@ -4,6 +4,7 @@ import { List, Map, MapPin, MessageCircle, Search, Star } from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { requestRide } from "../../api/rideApi";
 import { getTravelPosts } from "../../api/travelApi";
+import BackButton from "../../components/common/BackButton";
 import LocationSearch from "../../components/location/LocationSearch";
 import RideMap from "../../components/map/RideMap";
 import { useAuth } from "../../context/AuthContext";
@@ -180,12 +181,15 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
       <div className="mx-auto max-w-7xl">
+        <div className="pb-4 pt-2">
+          <BackButton label="My Dashboard" to="/passenger" />
+        </div>
         <section className="rounded-2xl bg-gray-900 p-3 text-white shadow-md md:p-5">
           <p className="text-sm font-semibold text-orange-300">Ride search</p>
           <h1 className="mt-1 text-lg font-extrabold md:text-xl">Find a route near you</h1>
           <p className="mt-2 max-w-2xl text-sm text-gray-300">
-            Search by village or town, use your location to show pickup points within 10 km,
-            and book an available seat.
+            Search by location, use your location to show pickup points within 10 km, and book
+            an available seat.
           </p>
         </section>
 
@@ -199,7 +203,8 @@ export default function Home() {
             onCoordinatesChange={(coords) =>
               setFromLocation((current) => ({ ...current, ...coords }))
             }
-            placeholder="From village or town"
+            label="From"
+            placeholder="e.g. Sector 12, Bathinda"
           />
           <LocationSearch
             value={toLocation}
@@ -207,7 +212,8 @@ export default function Home() {
             onCoordinatesChange={(coords) =>
               setToLocation((current) => ({ ...current, ...coords }))
             }
-            placeholder="To village or town"
+            label="To"
+            placeholder="e.g. Bus Stand, Patiala"
             showCurrentLocation={false}
           />
           <button
@@ -401,7 +407,7 @@ const EmptyState = () => (
   <div className="rounded-2xl bg-white p-8 text-center shadow-md">
     <p className="text-5xl">No rides</p>
     <h2 className="mt-4 text-xl font-extrabold text-gray-950">No rides found</h2>
-    <p className="mt-2 text-gray-500">Try different villages or clear your filters.</p>
+    <p className="mt-2 text-gray-500">Try different locations or clear your filters.</p>
   </div>
 );
 

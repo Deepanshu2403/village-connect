@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import API from "../api/client";
 import { getMe, loginUser, registerUser } from "../api/authApi";
 
 const AuthContext = createContext(null);
@@ -27,6 +28,24 @@ export const AuthProvider = ({ children }) => {
     const res = await loginUser(credentials);
     localStorage.setItem("token", res.data.token);
     setUser(res.data.user);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          try {
+            await API.put("/location/driver", {
+              lat: pos.coords.latitude,
+              lng: pos.coords.longitude,
+            });
+          } catch {
+            // Location capture should never block login.
+          }
+        },
+        () => {},
+        { timeout: 8000, maximumAge: 300000 }
+      );
+    }
+
     return res.data.user;
   };
 
