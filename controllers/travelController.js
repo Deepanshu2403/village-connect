@@ -37,11 +37,11 @@ const geocodePlace = async (query) => {
   }
 
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&format=json&addressdetails=1&limit=5&countrycodes=in`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(cleanQuery)}&format=json&addressdetails=1&limit=5&countrycodes=in&accept-language=en`;
     const response = await fetch(url, {
       headers: {
         "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
-        "Accept-Language": "en,hi",
+        "Accept-Language": "en",
       },
     });
     if (!response.ok) return null;
@@ -185,83 +185,96 @@ const searchPlaces = async (req, res, next) => {
       return res.json({ success: true, results: placeSearchCache.get(cacheKey) });
     }
 
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     const headers = {
-      "User-Agent": "VillageConnect/1.0 (rural-india-transport)",
-      "Accept-Language": "en,hi",
+      "User-Agent": "VillageConnect/1.0 rural-transport-india contact@villageconnect.in",
+      "Accept-Language": "en",
+      Accept: "application/json",
     };
+
+    const baseParams = new URLSearchParams({
+      format: "jsonv2",
+      addressdetails: "1",
+      limit: "15",
+      countrycodes: "in",
+      "accept-language": "en",
+      dedupe: "1",
+    });
 
     const searches = await Promise.allSettled([
       fetch(
-        `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(query)}&` +
-          `format=json&addressdetails=1&limit=10&countrycodes=in&featuretype=settlement`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&${baseParams}`,
         { headers }
       ).then((response) => (response.ok ? response.json() : [])),
       fetch(
-        `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(`${query} India`)}&` +
-          `format=json&addressdetails=1&limit=8&countrycodes=in`,
-        { headers }
-      ).then((response) => (response.ok ? response.json() : [])),
-      fetch(
-        `https://nominatim.openstreetmap.org/search?` +
-          `q=${encodeURIComponent(query)}&` +
-          `format=json&addressdetails=1&limit=8&countrycodes=in&bounded=0`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${query}, India`)}&${baseParams}`,
         { headers }
       ).then((response) => (response.ok ? response.json() : [])),
     ]);
 
-    const allResults = [];
-    const seenCoordinates = new Set();
+    const combined = [];
+    const seen = new Set();
 
-    for (const result of searches) {
-      if (result.status !== "fulfilled" || !Array.isArray(result.value)) continue;
-      for (const item of result.value) {
-        const key = `${item.lat}-${item.lon}`;
-        if (seenCoordinates.has(key)) continue;
-        seenCoordinates.add(key);
-        allResults.push(item);
-      }
-    }
+    const processResults = (results) => {
+      if (!Array.isArray(results)) return;
 
-    const results = allResults
-      .map((item) => {
+      for (const item of results) {
+        const lat = parseFloat(item.lat);
+        const lng = parseFloat(item.lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+
+        const key = `${lat.toFixed(3)}-${lng.toFixed(3)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+
         const addr = item.address || {};
         const primaryName =
           addr.village ||
           addr.hamlet ||
-          addr.suburb ||
           addr.neighbourhood ||
+          addr.suburb ||
+          addr.quarter ||
           addr.town ||
           addr.city ||
-          addr.county ||
+          addr.municipality ||
+          item.name ||
           item.display_name?.split(",")[0];
 
-        const parts = [
-          addr.village || addr.hamlet || addr.town || addr.city || addr.suburb,
+        if (!primaryName || primaryName.length < 2) continue;
+        if (/[\u0900-\u097F]/.test(primaryName)) continue;
+
+        const contextParts = [
           addr.county || addr.state_district,
           addr.state,
         ].filter(Boolean);
+        const context = [...new Set(contextParts)].join(", ");
 
-        const shortAddress = [...new Set(parts)].join(", ");
-
-        return {
+        combined.push({
           name: primaryName,
-          shortAddress,
+          context,
+          shortAddress: context,
+          displayName: context ? `${primaryName}, ${context}` : primaryName,
           fullAddress: item.display_name,
-          lat: parseFloat(item.lat),
-          lng: parseFloat(item.lon),
-          type: item.type,
-          importance: item.importance || 0,
-        };
-      })
-      .filter((item) => item.name && Number.isFinite(item.lat) && Number.isFinite(item.lng))
+          lat,
+          lng,
+          type: item.type || item.category,
+          importance: parseFloat(item.importance) || 0,
+        });
+      }
+    };
+
+    for (const result of searches) {
+      if (result.status === "fulfilled") processResults(result.value);
+    }
+
+    const results = combined
       .sort((a, b) => b.importance - a.importance)
       .filter(
         (item, index, items) =>
-          items.findIndex((candidate) => candidate.shortAddress === item.shortAddress) === index
+          items.findIndex((candidate) => candidate.displayName === item.displayName) === index
       )
-      .slice(0, 8);
+      .slice(0, 10);
 
     placeSearchCache.set(cacheKey, results);
     res.json({ success: true, results });
@@ -283,11 +296,11 @@ const reverseGeocode = async (req, res, next) => {
       return res.json(reverseGeocodeCache.get(cacheKey));
     }
 
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1`;
+    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1&accept-language=en`;
     const response = await fetch(url, {
       headers: {
         "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
-        "Accept-Language": "en,hi",
+        "Accept-Language": "en",
       },
     });
 
@@ -296,16 +309,25 @@ const reverseGeocode = async (req, res, next) => {
     }
 
     const data = await response.json();
-    const placeName =
-      data.address?.village ||
-      data.address?.town ||
-      data.address?.city ||
-      data.address?.suburb ||
-      data.address?.county ||
-      data.display_name ||
-      "Current Location";
+    const addr = data.address || {};
+    const town =
+      addr.village ||
+      addr.town ||
+      addr.city ||
+      addr.suburb ||
+      addr.hamlet ||
+      addr.county ||
+      data.display_name?.split(",")[0];
+    const state = addr.state || "";
+    const placeName = state ? `${town}, ${state}` : town || "Unknown location";
 
-    const payload = { success: true, placeName, fullAddress: data.display_name };
+    const payload = {
+      success: true,
+      placeName,
+      town,
+      state,
+      fullAddress: data.display_name,
+    };
     reverseGeocodeCache.set(cacheKey, payload);
     res.json(payload);
   } catch (err) {

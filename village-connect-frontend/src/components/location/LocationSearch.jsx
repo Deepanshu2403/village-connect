@@ -75,10 +75,11 @@ export default function LocationSearch({
   };
 
   const handleSelect = (place) => {
-    setQuery(place.name);
+    const displayValue = place.displayName || place.name;
+    setQuery(displayValue);
     setShowDropdown(false);
     const nextLocation = {
-      name: place.name,
+      name: displayValue,
       lat: place.lat ?? null,
       lng: place.lng ?? null,
     };
@@ -208,12 +209,12 @@ export default function LocationSearch({
                   <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-400" />
                   <span className="min-w-0">
                     <span className="block truncate font-semibold text-gray-900">{place.name}</span>
-                    {place.shortAddress && (
+                    {(place.context || place.shortAddress) && (
                       <span className="mt-0.5 block truncate text-xs text-gray-400">
-                        {place.shortAddress}
+                        {place.context || place.shortAddress}
                       </span>
                     )}
-                    {!place.shortAddress && place.fullAddress && (
+                    {!place.context && !place.shortAddress && place.fullAddress && (
                       <span className="mt-0.5 line-clamp-1 block text-xs text-gray-400">
                         {place.fullAddress}
                       </span>

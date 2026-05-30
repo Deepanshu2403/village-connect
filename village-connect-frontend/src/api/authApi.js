@@ -9,3 +9,4 @@ export const verifyOTP = (phone, otp, purpose) =>
   API.post("/otp/verify", { phone, otp, purpose });
 export const resetPassword = (phone, newPassword) =>
   API.post("/auth/reset-password", { phone, newPassword });
+export const deleteAccount = () => API.delete("/auth/delete-account");

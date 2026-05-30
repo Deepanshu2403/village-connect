@@ -22,7 +22,9 @@ model User {
   travelPosts        TravelPost[]
   rideRequests       RideRequest[]
   goodsRequests      GoodsRequest[]
-  goodsMatchesDriven GoodsMatch[]   @relation("DriverGoodsMatches")
+  itemRequests       ItemRequest[]   @relation("ItemRequests")
+  itemDeliveries     ItemRequest[]   @relation("ItemDeliveries")
+  goodsMatchesDriven GoodsMatch[]    @relation("DriverGoodsMatches")
   driverLocation     DriverLocation? @relation("DriverLocation")
 
   sentMessages     Message[] @relation("SenderMessages")
@@ -60,12 +62,15 @@ model TravelPost {
 
   seatsAvailable Int
 
-  canCarryGoods Boolean
+  canCarryGoods  Boolean
+  canBringItems  Boolean @default(false)
+  itemCategories String?
+  itemNotes      String?
 
   capacityKg Int
 
-  vehicleType String
-  status      String @default("scheduled")
+  vehicleType   String
+  status        String @default("scheduled")
   estimatedFare Float?
 
   userId Int
@@ -75,6 +80,7 @@ model TravelPost {
   rideRequests RideRequest[]
 
   goodsMatches GoodsMatch[]
+  itemRequests ItemRequest[]
 
   startedAt   DateTime?
   pickedUpAt  DateTime?
@@ -124,12 +130,38 @@ model GoodsRequest {
   createdAt DateTime @default(now())
 }
 
+model ItemRequest {
+  id               Int       @id @default(autoincrement())
+  requesterId      Int
+  from             String
+  to               String
+  fromLat          Float?
+  fromLng          Float?
+  toLat            Float?
+  toLng            Float?
+  itemName         String
+  quantity         Int       @default(1)
+  description      String?
+  category         String    @default("other")
+  budget           Float?
+  status           String    @default("pending")
+  acceptedByDriver Int?
+  travelPostId     Int?
+  pickedUpAt       DateTime?
+  deliveredAt      DateTime?
+  createdAt        DateTime  @default(now())
+
+  requester  User        @relation("ItemRequests", fields: [requesterId], references: [id])
+  acceptedBy User?       @relation("ItemDeliveries", fields: [acceptedByDriver], references: [id])
+  travelPost TravelPost? @relation(fields: [travelPostId], references: [id])
+}
+
 model GoodsMatch {
-  id             Int    @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   goodsRequestId Int
   travelPostId   Int
   driverId       Int
-  status         String @default("accepted")
+  status         String    @default("accepted")
   pickedUpAt     DateTime?
   deliveredAt    DateTime?
 

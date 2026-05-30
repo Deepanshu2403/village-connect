@@ -77,7 +77,15 @@ const getDriverDashboard = async (req, res, next) => {
       orderBy: { completedAt: "desc" },
     });
 
-    const [totalCompleted, totalPassengers, driverLocationRecord, allGoodsRequests, activeGoodsMatches] = await Promise.all([
+    const [
+      totalCompleted,
+      totalPassengers,
+      driverLocationRecord,
+      allGoodsRequests,
+      activeGoodsMatches,
+      openItemRequests,
+      activeItemDeliveries,
+    ] = await Promise.all([
       prisma.travelPost.count({
         where: { userId: driverId, status: "completed" },
       }),
@@ -117,6 +125,28 @@ const getDriverDashboard = async (req, res, next) => {
         },
         orderBy: { createdAt: "desc" },
       }),
+      prisma.itemRequest.findMany({
+        where: { status: "pending" },
+        include: {
+          requester: {
+            select: { id: true, name: true, phone: true, rating: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        take: 20,
+      }).catch(() => []),
+      prisma.itemRequest.findMany({
+        where: {
+          acceptedByDriver: driverId,
+          status: { in: ["accepted", "in_transit"] },
+        },
+        include: {
+          requester: {
+            select: { id: true, name: true, phone: true, rating: true },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+      }).catch(() => []),
     ]);
 
     let relevantGoodsRequests = allGoodsRequests;
@@ -155,6 +185,22 @@ const getDriverDashboard = async (req, res, next) => {
     const openGoodsRequests =
       routeMatchedGoods.length > 0 ? routeMatchedGoods : relevantGoodsRequests.slice(0, 10);
 
+    let relevantItemRequests = openItemRequests;
+    if (driverLocationRecord) {
+      const { lat: driverLat, lng: driverLng } = driverLocationRecord;
+
+      relevantItemRequests = openItemRequests
+        .map((request) => ({
+          ...request,
+          distanceKm:
+            request.fromLat !== null && request.fromLng !== null
+              ? Math.round(haversineKm(driverLat, driverLng, request.fromLat, request.fromLng) * 10) / 10
+              : null,
+        }))
+        .filter((request) => request.distanceKm === null || request.distanceKm <= 15)
+        .sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99));
+    }
+
     const pendingCount = scheduledPosts.reduce(
       (count, post) =>
         count +
@@ -171,6 +217,8 @@ const getDriverDashboard = async (req, res, next) => {
       todayCompleted: todayCompleted.map(withTripStats),
       openGoodsRequests,
       activeGoodsMatches,
+      openItemRequests: relevantItemRequests,
+      activeItemDeliveries,
       stats: {
         totalCompleted,
         totalPassengers,

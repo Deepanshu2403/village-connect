@@ -222,4 +222,111 @@ const getMe = async (req, res, next) => {
   }
 };
 
-module.exports = { register, login, getMe, resetPassword };
+const deleteAccount = async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.notification.deleteMany({ where: { userId } });
+
+      await tx.message.deleteMany({
+        where: { OR: [{ senderId: userId }, { receiverId: userId }] },
+      });
+
+      await tx.rating.deleteMany({
+        where: { OR: [{ raterId: userId }, { ratedUserId: userId }] },
+      });
+
+      await tx.otpVerification
+        .deleteMany({
+          where: { phone: user.phone },
+        })
+        .catch(() => {});
+
+      await tx.itemRequest
+        .updateMany({
+          where: {
+            acceptedByDriver: userId,
+            status: { in: ["pending", "accepted", "in_transit"] },
+          },
+          data: {
+            status: "cancelled",
+            acceptedByDriver: null,
+            travelPostId: null,
+          },
+        })
+        .catch(() => {});
+
+      await tx.itemRequest
+        .deleteMany({
+          where: { requesterId: userId },
+        })
+        .catch(() => {});
+
+      await tx.itemRequest
+        .updateMany({
+          where: { travelPost: { userId } },
+          data: {
+            status: "cancelled",
+            acceptedByDriver: null,
+            travelPostId: null,
+          },
+        })
+        .catch(() => {});
+
+      await tx.goodsMatch.deleteMany({
+        where: {
+          OR: [
+            { driverId: userId },
+            { goodsRequest: { requesterId: userId } },
+            { travelPost: { userId } },
+          ],
+        },
+      });
+
+      await tx.rideRequest.deleteMany({
+        where: {
+          OR: [{ passengerId: userId }, { travelPost: { userId } }],
+        },
+      });
+
+      await tx.goodsRequest.updateMany({
+        where: { driverId: userId },
+        data: { status: "cancelled", driverId: null },
+      });
+
+      await tx.goodsRequest.deleteMany({
+        where: { requesterId: userId },
+      });
+
+      await tx.travelPost.deleteMany({
+        where: { userId },
+      });
+
+      await tx.driverLocation
+        .deleteMany({
+          where: { driverId: userId },
+        })
+        .catch(() => {});
+
+      await tx.user.delete({ where: { id: userId } });
+    });
+
+    res.json({
+      success: true,
+      message: "Account deleted successfully",
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, login, getMe, resetPassword, deleteAccount };

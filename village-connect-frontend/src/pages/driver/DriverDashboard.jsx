@@ -8,12 +8,14 @@ import {
   Package,
   Phone,
   Plus,
+  ShoppingBag,
   Star,
   Trash2,
   X,
 } from "lucide-react";
 import { getDriverDashboard } from "../../api/dashboardApi";
 import { acceptGoodsDelivery, markGoodsDelivered, markGoodsPickup } from "../../api/goodsApi";
+import { acceptItemRequest, markItemDelivered, markItemPickedUp } from "../../api/itemApi";
 import {
   acceptRideRequest,
   deleteRideRequest,
@@ -22,9 +24,11 @@ import {
   rejectRideRequest,
   startTrip,
 } from "../../api/rideApi";
+import LocationDisplay from "../../components/location/LocationDisplay";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
+import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 import { useDriverLocationBroadcast } from "../../hooks/useDriverLocationBroadcast";
 import { timeAgo } from "../../utils/timeAgo";
 
@@ -46,6 +50,8 @@ export default function DriverDashboard() {
     todayCompleted: [],
     openGoodsRequests: [],
     activeGoodsMatches: [],
+    openItemRequests: [],
+    activeItemDeliveries: [],
     stats: {},
   });
   const [loading, setLoading] = useState(true);
@@ -53,6 +59,8 @@ export default function DriverDashboard() {
   const [requestActionId, setRequestActionId] = useState(null);
   const [tripActionLoading, setTripActionLoading] = useState(null);
   const [goodsActionLoading, setGoodsActionLoading] = useState(null);
+  const [itemActionLoading, setItemActionLoading] = useState(null);
+  const { location, locationName, loading: locationLoading, permissionDenied } = useCurrentLocation();
 
   useDriverLocationBroadcast(data.activePost?.id);
 
@@ -66,6 +74,8 @@ export default function DriverDashboard() {
         todayCompleted: res.data.todayCompleted || [],
         openGoodsRequests: res.data.openGoodsRequests || [],
         activeGoodsMatches: res.data.activeGoodsMatches || [],
+        openItemRequests: res.data.openItemRequests || [],
+        activeItemDeliveries: res.data.activeItemDeliveries || [],
         stats: res.data.stats || {},
       });
     } catch {
@@ -204,6 +214,49 @@ export default function DriverDashboard() {
     }
   };
 
+  const handleAcceptItem = async (itemId) => {
+    if (itemActionLoading) return;
+    setItemActionLoading(itemId);
+    try {
+      const activeTripId = data?.scheduledPosts?.[0]?.id || data?.activePost?.id;
+      await acceptItemRequest(itemId, activeTripId);
+      addToast("Item request accepted", "success");
+      await fetchDashboard(true);
+    } catch (err) {
+      addToast(err.response?.data?.error || "Failed to accept item request", "error");
+    } finally {
+      setItemActionLoading(null);
+    }
+  };
+
+  const handleItemPickedUp = async (itemId) => {
+    if (itemActionLoading) return;
+    setItemActionLoading(`pickup-${itemId}`);
+    try {
+      await markItemPickedUp(itemId);
+      addToast("Item marked as picked up", "success");
+      await fetchDashboard(true);
+    } catch (err) {
+      addToast(err.response?.data?.error || "Could not update item", "error");
+    } finally {
+      setItemActionLoading(null);
+    }
+  };
+
+  const handleItemDelivered = async (itemId) => {
+    if (itemActionLoading) return;
+    setItemActionLoading(`delivered-${itemId}`);
+    try {
+      await markItemDelivered(itemId);
+      addToast("Item delivered", "success");
+      await fetchDashboard(true);
+    } catch (err) {
+      addToast(err.response?.data?.error || "Could not update item", "error");
+    } finally {
+      setItemActionLoading(null);
+    }
+  };
+
   if (loading) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50">
@@ -234,6 +287,8 @@ export default function DriverDashboard() {
     scheduledPosts = [],
     openGoodsRequests = [],
     activeGoodsMatches = [],
+    openItemRequests = [],
+    activeItemDeliveries = [],
     stats = {},
   } = data || {};
   const todayCompleted = data?.todayCompleted || [];
@@ -280,6 +335,13 @@ export default function DriverDashboard() {
           </div>
         </section>
 
+        <LocationDisplay
+          location={location}
+          locationName={locationName}
+          loading={locationLoading}
+          permissionDenied={permissionDenied}
+        />
+
         {activePost && (
           <ActiveTripCard
             post={activePost}
@@ -305,6 +367,26 @@ export default function DriverDashboard() {
                   match={match}
                   actionLoading={goodsActionLoading}
                   onStatus={handleGoodsStatus}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {activeItemDeliveries.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5 text-purple-500" />
+              <h2 className="text-base font-bold text-gray-900">Active Item Deliveries</h2>
+            </div>
+            <div className="space-y-3">
+              {activeItemDeliveries.map((item) => (
+                <ActiveItemDeliveryCard
+                  key={item.id}
+                  item={item}
+                  actionLoading={itemActionLoading}
+                  onPickedUp={handleItemPickedUp}
+                  onDelivered={handleItemDelivered}
                 />
               ))}
             </div>
@@ -355,6 +437,30 @@ export default function DriverDashboard() {
                   goods={goods}
                   loading={goodsActionLoading === goods.id}
                   onAccept={() => handleAcceptGoods(goods.id)}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {openItemRequests.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-2">
+              <ShoppingBag className="h-5 w-5 text-purple-500" />
+              <div>
+                <h2 className="text-base font-bold text-gray-900">Item Requests from Town</h2>
+                <p className="text-xs text-gray-500">
+                  Passengers need items brought from town.
+                </p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              {openItemRequests.map((item) => (
+                <ItemDeliveryRequestCard
+                  key={item.id}
+                  item={item}
+                  loading={itemActionLoading === item.id}
+                  onAccept={() => handleAcceptItem(item.id)}
                 />
               ))}
             </div>
@@ -591,6 +697,63 @@ function GoodsDeliveryRequestCard({ goods, loading, onAccept }) {
   );
 }
 
+function ItemDeliveryRequestCard({ item, loading, onAccept }) {
+  return (
+    <article className="rounded-xl border border-purple-100 bg-purple-50 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="rounded-full bg-purple-200 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-purple-700">
+              Order from Town
+            </span>
+            <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs capitalize text-gray-500">
+              {item.category}
+            </span>
+            {item.distanceKm !== null && item.distanceKm !== undefined && (
+              <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs text-orange-600">
+                {item.distanceKm} km away
+              </span>
+            )}
+          </div>
+          <h4 className="text-sm font-bold text-gray-900">
+            {item.itemName}
+            {item.quantity > 1 ? ` x ${item.quantity}` : ""}
+          </h4>
+          {item.description && (
+            <p className="mt-1 text-xs italic text-gray-500">"{item.description}"</p>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <RoutePill>{item.from}</RoutePill>
+            <span className="text-xs text-purple-400">to</span>
+            <RoutePill>{item.to}</RoutePill>
+          </div>
+          <div className="mt-1.5 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+            <span>{item.requester?.name}</span>
+            <span>{item.requester?.phone}</span>
+            {item.budget && <span className="font-semibold text-green-600">Budget: Rs {item.budget}</span>}
+          </div>
+        </div>
+        <div className="flex flex-shrink-0 gap-2 md:flex-col">
+          <button
+            type="button"
+            onClick={onAccept}
+            disabled={loading}
+            className="rounded-lg bg-purple-500 px-3 py-2 text-xs font-bold text-white transition-colors hover:bg-purple-600 disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Accept"}
+          </button>
+          <Link
+            to={`/chat/${item.requester?.id}`}
+            className="rounded-lg border border-purple-200 bg-white px-3 py-2 text-center text-xs font-bold text-purple-600"
+          >
+            Chat
+          </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
 function ActiveGoodsDeliveryCard({ match, actionLoading, onStatus }) {
   const request = match.goodsRequest;
   const pickupLoading = actionLoading === `pickup-${match.id}`;
@@ -639,6 +802,55 @@ function ActiveGoodsDeliveryCard({ match, actionLoading, onStatus }) {
           >
             Chat
           </Link>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function ActiveItemDeliveryCard({ item, actionLoading, onPickedUp, onDelivered }) {
+  const isAccepted = item.status === "accepted";
+  const pickupLoading = actionLoading === `pickup-${item.id}`;
+  const deliveredLoading = actionLoading === `delivered-${item.id}`;
+
+  return (
+    <article className="rounded-xl border border-gray-200 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-bold text-gray-900">{item.itemName}</p>
+          <p className="mt-1 text-xs text-gray-500">
+            {item.from} to {item.to}
+          </p>
+          <StatusBadge tone={isAccepted ? "amber" : "blue"}>
+            {isAccepted ? "Pending Pickup" : "In Transit"}
+          </StatusBadge>
+          {item.requester && (
+            <p className="mt-2 text-xs text-gray-500">
+              For {item.requester.name} ({item.requester.phone})
+            </p>
+          )}
+        </div>
+        <div className="flex flex-shrink-0 flex-col gap-1.5">
+          {isAccepted && (
+            <button
+              type="button"
+              onClick={() => onPickedUp(item.id)}
+              disabled={Boolean(actionLoading)}
+              className="rounded-lg bg-yellow-500 px-3 py-2 text-xs font-bold text-white hover:bg-yellow-600 disabled:opacity-60"
+            >
+              {pickupLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Picked Up"}
+            </button>
+          )}
+          {!isAccepted && (
+            <button
+              type="button"
+              onClick={() => onDelivered(item.id)}
+              disabled={Boolean(actionLoading)}
+              className="rounded-lg bg-green-500 px-3 py-2 text-xs font-bold text-white hover:bg-green-600 disabled:opacity-60"
+            >
+              {deliveredLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Delivered"}
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -768,6 +980,7 @@ function StatusBadge({ children, tone = "gray" }) {
     gray: "bg-gray-100 text-gray-600",
     amber: "bg-amber-100 text-amber-700",
     green: "bg-green-100 text-green-700",
+    blue: "bg-blue-100 text-blue-700",
   };
 
   return (

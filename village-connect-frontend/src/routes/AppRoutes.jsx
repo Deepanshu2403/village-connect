@@ -7,12 +7,14 @@ import Login from "../pages/auth/Login";
 import DriverDashboard from "../pages/driver/DriverDashboard";
 import TravelDetails from "../pages/driver/TravelDetails";
 import PassengerDashboard from "../pages/passenger/PassengerDashboard";
+import RequestItemPage from "../pages/passenger/RequestItemPage";
 import Home from "../pages/shared/Home";
 import CreateTravel from "../pages/shared/CreateTravel";
 import CreateGoods from "../pages/shared/CreateGoods";
 import RatePage from "../pages/shared/RatePage";
 import TripHistory from "../pages/shared/TripHistory";
 import NotificationsPage from "../pages/shared/NotificationsPage";
+import SettingsPage from "../pages/shared/SettingsPage";
 import ChatPage from "../pages/chat/ChatPage";
 import AdminDashboard from "../pages/admin/AdminDashboard";
 
@@ -143,6 +145,22 @@ export default function AppRoutes() {
           element={
             <PrivateRoute role="passenger">
               <CreateGoods />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/request-item"
+          element={
+            <PrivateRoute role="passenger">
+              <RequestItemPage />
+            </PrivateRoute>
+          }
+        />
+        <Route
+          path="/settings"
+          element={
+            <PrivateRoute>
+              <SettingsPage />
             </PrivateRoute>
           }
         />

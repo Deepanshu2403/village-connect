@@ -1,10 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Bell, History, LogOut, Menu, Package, Route, UserRound, X } from "lucide-react";
+import {
+  ArrowRight,
+  Bell,
+  History,
+  LogOut,
+  Menu,
+  Package,
+  Route,
+  Settings,
+  ShoppingBag,
+  UserRound,
+  X,
+} from "lucide-react";
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import { getNotifications, markNotificationRead } from "../../api/notificationApi";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
+import LocationDisplay from "../location/LocationDisplay";
+import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 import { initials } from "../../utils/format";
 import { timeAgo } from "../../utils/timeAgo";
 
@@ -13,12 +27,15 @@ const links = {
     { label: "Dashboard", to: "/driver", icon: Route },
     { label: "Post Travel", to: "/create-travel", icon: Route },
     { label: "History", to: "/history", icon: History },
+    { label: "Settings", to: "/settings", icon: Settings },
   ],
   passenger: [
     { label: "Find Rides", to: "/home", icon: Route },
+    { label: "Order Items", to: "/request-item", icon: ShoppingBag },
     { label: "Send Goods", to: "/create-goods", icon: Package },
     { label: "My Trips", to: "/passenger", icon: UserRound },
     { label: "History", to: "/history", icon: History },
+    { label: "Settings", to: "/settings", icon: Settings },
   ],
 };
 
@@ -32,6 +49,7 @@ export default function Navbar() {
   const [notifications, setNotifications] = useState([]);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
   const dropdownRef = useRef(null);
+  const { location, locationName, loading: locationLoading, permissionDenied } = useCurrentLocation();
 
   const roleLinks = links[user?.role] || [];
   const unreadCount = notifications.filter((item) => !item.isRead).length;
@@ -151,6 +169,18 @@ export default function Navbar() {
         </div>
 
         <div className="ml-auto flex items-center gap-2">
+          {location && locationName && (
+            <div className="hidden rounded-full border border-orange-100 bg-orange-50 px-2.5 py-1 md:flex">
+              <LocationDisplay
+                location={location}
+                locationName={locationName}
+                loading={locationLoading}
+                permissionDenied={permissionDenied}
+                compact
+              />
+            </div>
+          )}
+
           <div className="relative" ref={dropdownRef}>
             <button
               type="button"

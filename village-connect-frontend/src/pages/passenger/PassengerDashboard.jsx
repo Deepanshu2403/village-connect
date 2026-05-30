@@ -9,28 +9,37 @@ import {
   Package,
   Phone,
   Search,
+  ShoppingBag,
   Star,
   Trash2,
 } from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
 import { deletePassengerRequest } from "../../api/rideApi";
 import ActiveGoodsCard from "../../components/passenger/ActiveGoodsCard";
+import LocationDisplay from "../../components/location/LocationDisplay";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
-import { useUserLocation } from "../../hooks/useUserLocation";
+import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 
 export default function PassengerDashboard() {
   const { user } = useAuth();
   const { on, off } = useSocket() || {};
   const { addToast } = useToast();
-  const { location, locationName, locationLoading } = useUserLocation();
+  const {
+    location,
+    locationName,
+    loading: locationLoading,
+    permissionDenied,
+    refetch: refetchLocation,
+  } = useCurrentLocation();
   const [dashData, setDashData] = useState({
     activeRide: null,
     confirmedRides: [],
     pendingRides: [],
     goodsRequests: [],
     activeGoodsMatches: [],
+    itemRequests: [],
     recentlyCompleted: null,
   });
   const [loading, setLoading] = useState(true);
@@ -48,6 +57,7 @@ export default function PassengerDashboard() {
         pendingRides: res.data.pendingRides || [],
         goodsRequests: res.data.goodsRequests || [],
         activeGoodsMatches: res.data.activeGoodsMatches || [],
+        itemRequests: res.data.itemRequests || [],
         recentlyCompleted: res.data.recentlyCompleted || null,
       });
     } catch {
@@ -93,6 +103,18 @@ export default function PassengerDashboard() {
     };
     const handleRideUpdated = () => fetchDashboard(true);
     const handleDashboardRefresh = () => fetchDashboard(true);
+    const handleItemAccepted = (eventData) => {
+      addToast(`Your item "${eventData.itemName}" request was accepted`, "success");
+      fetchDashboard(true);
+    };
+    const handleItemInTransit = () => {
+      addToast("Your item is on the way", "success");
+      fetchDashboard(true);
+    };
+    const handleItemDelivered = () => {
+      addToast("Your item has been delivered", "success");
+      fetchDashboard(true);
+    };
 
     on("ride:accepted", handleRideAccepted);
     on("ride:rejected", handleRideRejected);
@@ -100,6 +122,9 @@ export default function PassengerDashboard() {
     on("ride:completed", handleRideCompleted);
     on("ride:updated", handleRideUpdated);
     on("dashboard:refresh", handleDashboardRefresh);
+    on("item:accepted", handleItemAccepted);
+    on("item:in_transit", handleItemInTransit);
+    on("item:delivered", handleItemDelivered);
 
     return () => {
       off("ride:accepted", handleRideAccepted);
@@ -108,6 +133,9 @@ export default function PassengerDashboard() {
       off("ride:completed", handleRideCompleted);
       off("ride:updated", handleRideUpdated);
       off("dashboard:refresh", handleDashboardRefresh);
+      off("item:accepted", handleItemAccepted);
+      off("item:in_transit", handleItemInTransit);
+      off("item:delivered", handleItemDelivered);
     };
   }, [addToast, off, on]);
 
@@ -133,6 +161,10 @@ export default function PassengerDashboard() {
   const pendingRides = dashData.pendingRides || [];
   const goodsRequests = dashData.goodsRequests || [];
   const activeGoodsMatches = dashData.activeGoodsMatches || [];
+  const itemRequests = dashData.itemRequests || [];
+  const activeItemRequests = itemRequests.filter(
+    (request) => !["delivered", "cancelled"].includes(request.status)
+  );
   const completedRide = dashData.recentlyCompleted || null;
 
   if (loading) {
@@ -213,34 +245,14 @@ export default function PassengerDashboard() {
         )}
 
         <div className="mb-4 flex items-start gap-3">
-          <div className="flex flex-1 items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3">
-            <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-blue-100">
-              {locationLoading ? (
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
-              ) : (
-                <MapPin className={`h-4 w-4 ${location ? "text-blue-600" : "text-gray-400"}`} />
-              )}
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-medium text-gray-400">Your location</p>
-              <p className="truncate text-sm font-semibold text-gray-800">
-                {locationLoading
-                  ? "Detecting..."
-                  : locationName ||
-                    (location
-                      ? `${location.lat.toFixed(3)}, ${location.lng.toFixed(3)}`
-                      : "Location not available")}
-              </p>
-            </div>
-            {!location && !locationLoading && (
-              <button
-                type="button"
-                onClick={() => window.location.reload()}
-                className="flex-shrink-0 text-xs font-medium text-blue-500 hover:text-blue-600"
-              >
-                Enable
-              </button>
-            )}
+          <div className="flex-1">
+            <LocationDisplay
+              location={location}
+              locationName={locationName}
+              loading={locationLoading}
+              permissionDenied={permissionDenied}
+              onRequestPermission={refetchLocation}
+            />
           </div>
         </div>
 
@@ -263,6 +275,20 @@ export default function PassengerDashboard() {
               ))}
             </div>
           </div>
+        )}
+
+        {activeItemRequests.length > 0 && (
+          <section className="rounded-2xl bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-bold text-gray-900">My Item Requests</h2>
+              <StatusBadge>{activeItemRequests.length}</StatusBadge>
+            </div>
+            <div className="space-y-3">
+              {activeItemRequests.map((item) => (
+                <ItemRequestCard key={item.id} item={item} />
+              ))}
+            </div>
+          </section>
         )}
 
         <section className="rounded-2xl bg-white p-5 shadow-sm">
@@ -337,6 +363,14 @@ function QuickActions() {
         <Search className="mb-3 h-8 w-8" />
         <h3 className="text-sm font-extrabold">Find a Ride</h3>
         <p className="mt-0.5 text-xs text-orange-100">Browse nearby trips</p>
+      </Link>
+      <Link
+        to="/request-item"
+        className="rounded-2xl bg-gradient-to-br from-purple-500 to-purple-600 p-4 text-white transition-all hover:-translate-y-0.5 hover:shadow-lg"
+      >
+        <ShoppingBag className="mb-3 h-8 w-8" />
+        <h3 className="text-sm font-extrabold">Order from Town</h3>
+        <p className="mt-0.5 text-xs text-purple-100">Ask a driver to bring items</p>
       </Link>
       <Link
         to="/create-goods"
@@ -545,6 +579,53 @@ function GoodsRequestCard({ request }) {
   );
 }
 
+function ItemRequestCard({ item }) {
+  return (
+    <article className="rounded-xl border border-gray-200 bg-white p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="truncate text-sm font-bold text-gray-900">
+            {item.itemName}
+            {item.quantity > 1 ? ` x ${item.quantity}` : ""}
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            {item.from} to {item.to}
+          </p>
+          {item.budget && (
+            <p className="mt-0.5 text-xs text-gray-500">Budget: Rs {item.budget}</p>
+          )}
+        </div>
+        <StatusBadge tone={item.status === "pending" ? "amber" : item.status === "in_transit" ? "blue" : "green"}>
+          {item.status === "pending"
+            ? "Waiting"
+            : item.status === "accepted"
+              ? "Accepted"
+              : item.status === "in_transit"
+                ? "On the way"
+                : item.status}
+        </StatusBadge>
+      </div>
+      {item.acceptedBy && (
+        <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
+          <div>
+            <p className="text-xs text-gray-500">
+              Driver: <strong>{item.acceptedBy.name}</strong>
+            </p>
+            <p className="text-xs text-gray-400">{item.acceptedBy.phone}</p>
+          </div>
+          <a
+            href={`tel:${item.acceptedBy.phone}`}
+            className="flex items-center gap-1 rounded-lg bg-green-500 px-3 py-1.5 text-xs font-bold text-white"
+          >
+            <Phone className="h-3.5 w-3.5" />
+            Call
+          </a>
+        </div>
+      )}
+    </article>
+  );
+}
+
 function ExpiryCountdown({ expiresAt }) {
   const [timeLeft, setTimeLeft] = useState("");
   const [isUrgent, setIsUrgent] = useState(false);
@@ -650,6 +731,7 @@ function StatusBadge({ children, tone = "gray" }) {
     amber: "bg-amber-100 text-amber-700",
     green: "bg-green-100 text-green-700",
     orange: "bg-orange-100 text-orange-700",
+    blue: "bg-blue-100 text-blue-700",
   };
 
   return (
