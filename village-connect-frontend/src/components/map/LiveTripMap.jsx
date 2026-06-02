@@ -7,7 +7,7 @@ export default function LiveTripMap({
   fromLng,
   toLat,
   toLng,
-  height = 240,
+  height = "min(300px, 50vw)",
 }) {
   const driverPoint =
     driverLocation?.lat && driverLocation?.lng
@@ -21,7 +21,7 @@ export default function LiveTripMap({
   return (
     <div
       className="overflow-hidden rounded-xl border border-blue-100"
-      style={{ height }}
+      style={{ height, minHeight: 180 }}
     >
       <MapContainer center={center} zoom={driverPoint ? 13 : 6} className="h-full w-full">
         <TileLayer

@@ -16,6 +16,7 @@ import {
 import { getDriverDashboard } from "../../api/dashboardApi";
 import { acceptGoodsDelivery, markGoodsDelivered, markGoodsPickup } from "../../api/goodsApi";
 import { acceptItemRequest, markItemDelivered, markItemPickedUp } from "../../api/itemApi";
+import { cancelTrip } from "../../api/travelApi";
 import {
   acceptRideRequest,
   deleteRideRequest,
@@ -24,12 +25,14 @@ import {
   rejectRideRequest,
   startTrip,
 } from "../../api/rideApi";
+import DeliveryNavigationCard from "../../components/driver/DeliveryNavigationCard";
 import LocationDisplay from "../../components/location/LocationDisplay";
 import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
 import { useDriverLocationBroadcast } from "../../hooks/useDriverLocationBroadcast";
+import { formatQuantity } from "../../utils/formatQuantity";
 import { timeAgo } from "../../utils/timeAgo";
 
 const getTimeOfDay = () => {
@@ -60,6 +63,7 @@ export default function DriverDashboard() {
   const [tripActionLoading, setTripActionLoading] = useState(null);
   const [goodsActionLoading, setGoodsActionLoading] = useState(null);
   const [itemActionLoading, setItemActionLoading] = useState(null);
+  const [cancelTripDialog, setCancelTripDialog] = useState(null);
   const { location, locationName, loading: locationLoading, permissionDenied } = useCurrentLocation();
 
   useDriverLocationBroadcast(data.activePost?.id);
@@ -176,6 +180,22 @@ export default function DriverDashboard() {
     }
   };
 
+  const handleCancelTrip = async () => {
+    if (!cancelTripDialog || tripActionLoading) return;
+    const postId = cancelTripDialog.postId;
+    setCancelTripDialog(null);
+    setTripActionLoading(`cancel-${postId}`);
+    try {
+      await cancelTrip(postId);
+      addToast("Trip cancelled", "info");
+      await fetchDashboard(true);
+    } catch (err) {
+      addToast(err.response?.data?.error || "Could not cancel trip", "error");
+    } finally {
+      setTripActionLoading(null);
+    }
+  };
+
   const handleAcceptGoods = async (goodsId) => {
     if (goodsActionLoading) return;
     setGoodsActionLoading(goodsId);
@@ -267,7 +287,7 @@ export default function DriverDashboard() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24">
+      <main className="page-root min-h-screen bg-gray-50 px-4 pb-10 pt-24">
         <div className="mx-auto max-w-2xl rounded-2xl bg-white p-8 text-center shadow-sm">
           <h1 className="text-xl font-extrabold text-gray-900">{error}</h1>
           <button
@@ -299,7 +319,7 @@ export default function DriverDashboard() {
   );
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+    <main className="page-root min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-5xl space-y-5">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-5 text-white">
           <div className="absolute inset-0 rounded-2xl bg-orange-500 opacity-5" />
@@ -487,6 +507,9 @@ export default function DriverDashboard() {
                   post={post}
                   tripActionLoading={tripActionLoading}
                   onStartTrip={handleStartTrip}
+                  onCancelTrip={() =>
+                    setCancelTripDialog({ postId: post.id, route: `${post.from} to ${post.to}` })
+                  }
                   onOpen={() => navigate(`/travel/${post.id}`)}
                 />
               ))}
@@ -510,6 +533,34 @@ export default function DriverDashboard() {
           </section>
         )}
       </div>
+      {cancelTripDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 p-4">
+          <div className="max-h-[90vh] w-full max-w-[380px] overflow-y-auto rounded-2xl bg-white p-6 text-center shadow-lg">
+            <Trash2 className="mx-auto mb-3 h-10 w-10 text-red-500" />
+            <h3 className="text-lg font-extrabold text-gray-900">Cancel this trip?</h3>
+            <p className="mt-2 text-sm font-semibold text-gray-700">{cancelTripDialog.route}</p>
+            <p className="mt-2 text-xs leading-5 text-gray-500">
+              Passengers with pending or accepted requests will be notified immediately.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setCancelTripDialog(null)}
+                className="justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700"
+              >
+                Keep Trip
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelTrip}
+                className="justify-center rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white"
+              >
+                Yes, Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -573,7 +624,7 @@ function RequestCard({ request, actionLoading, onAction }) {
   const isBusy = Boolean(actionLoading);
 
   return (
-    <article className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 transition-colors hover:border-orange-300">
+    <article className="flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5 transition-colors hover:border-orange-300 sm:flex-row sm:items-start">
       <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-amber-500 text-sm font-bold text-white">
         {passenger?.name?.charAt(0)?.toUpperCase() || "P"}
       </div>
@@ -608,7 +659,7 @@ function RequestCard({ request, actionLoading, onAction }) {
         </p>
       </div>
 
-      <div className="flex flex-shrink-0 flex-col gap-1.5">
+      <div className="flex flex-shrink-0 flex-wrap gap-1.5 sm:flex-col">
         <button
           type="button"
           onClick={() => onAction(request.id, "accept")}
@@ -717,8 +768,10 @@ function ItemDeliveryRequestCard({ item, loading, onAccept }) {
           </div>
           <h4 className="text-sm font-bold text-gray-900">
             {item.itemName}
-            {item.quantity > 1 ? ` x ${item.quantity}` : ""}
           </h4>
+          <p className="mt-0.5 text-xs font-semibold text-gray-500">
+            {formatQuantity(item.quantity, item.quantityUnit)}
+          </p>
           {item.description && (
             <p className="mt-1 text-xs italic text-gray-500">"{item.description}"</p>
           )}
@@ -804,6 +857,19 @@ function ActiveGoodsDeliveryCard({ match, actionLoading, onStatus }) {
           </Link>
         </div>
       </div>
+      {match.status === "accepted" && (
+        <div className="mt-3">
+          <DeliveryNavigationCard
+            fromLat={request?.fromLat}
+            fromLng={request?.fromLng}
+            toLat={request?.toLat}
+            toLng={request?.toLng}
+            fromName={request?.from}
+            toName={request?.to}
+            title="Goods Delivery"
+          />
+        </div>
+      )}
     </article>
   );
 }
@@ -818,6 +884,9 @@ function ActiveItemDeliveryCard({ item, actionLoading, onPickedUp, onDelivered }
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-bold text-gray-900">{item.itemName}</p>
+          <p className="mt-0.5 text-xs font-semibold text-gray-500">
+            {formatQuantity(item.quantity, item.quantityUnit)}
+          </p>
           <p className="mt-1 text-xs text-gray-500">
             {item.from} to {item.to}
           </p>
@@ -853,11 +922,24 @@ function ActiveItemDeliveryCard({ item, actionLoading, onPickedUp, onDelivered }
           )}
         </div>
       </div>
+      {["accepted", "in_transit"].includes(item.status) && (
+        <div className="mt-3">
+          <DeliveryNavigationCard
+            fromLat={item.fromLat}
+            fromLng={item.fromLng}
+            toLat={item.toLat}
+            toLng={item.toLng}
+            fromName={item.from}
+            toName={item.to}
+            title={`Delivery: ${item.itemName}`}
+          />
+        </div>
+      )}
     </article>
   );
 }
 
-function ScheduledTripCard({ post, tripActionLoading, onStartTrip, onOpen }) {
+function ScheduledTripCard({ post, tripActionLoading, onStartTrip, onCancelTrip, onOpen }) {
   const acceptedCount = (post.rideRequests || []).filter((request) => request.status === "accepted").length;
   const pendingCount = (post.rideRequests || []).filter((request) =>
     ["pending", "requested"].includes(request.status)
@@ -900,7 +982,7 @@ function ScheduledTripCard({ post, tripActionLoading, onStartTrip, onOpen }) {
         )}
       </div>
 
-      <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+      <div className="flex flex-col gap-2 sm:flex-row" onClick={(event) => event.stopPropagation()}>
         <button
           type="button"
           onClick={() => onStartTrip(post.id)}
@@ -912,6 +994,16 @@ function ScheduledTripCard({ post, tripActionLoading, onStartTrip, onOpen }) {
           ) : (
             "Start Trip"
           )}
+        </button>
+        <button
+          type="button"
+          onClick={onCancelTrip}
+          disabled={tripActionLoading === `cancel-${post.id}`}
+          className={`flex items-center justify-center rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-xs font-bold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-60 ${
+            hasAccepted ? "sm:flex-none" : "sm:flex-1"
+          }`}
+        >
+          {tripActionLoading === `cancel-${post.id}` ? "Cancelling..." : "Cancel Trip"}
         </button>
       </div>
     </article>

@@ -11,6 +11,7 @@ const ITEM_CATEGORIES = [
   "clothing",
   "other",
 ];
+const QUANTITY_UNITS = ["items", "kg", "g", "packets", "litres"];
 
 const toOptionalNumber = (value) => {
   if (value === undefined || value === null || value === "") return null;
@@ -23,6 +24,7 @@ const createItemRequest = async (req, res, next) => {
     const {
       itemName,
       quantity,
+      quantityUnit,
       description,
       category,
       from,
@@ -45,6 +47,7 @@ const createItemRequest = async (req, res, next) => {
         requesterId: req.user.userId,
         itemName: itemName.trim(),
         quantity: Number(quantity) || 1,
+        quantityUnit: QUANTITY_UNITS.includes(quantityUnit) ? quantityUnit : "items",
         description: description?.trim() || null,
         category: ITEM_CATEGORIES.includes(category) ? category : "other",
         from: from.trim(),
@@ -257,17 +260,27 @@ const cancelItemRequest = async (req, res, next) => {
       },
     });
 
-    if (!request) return res.status(404).json({ error: "Not found" });
-
-    const isRequester = request.requesterId === userId;
-    const isDriver = request.acceptedByDriver === userId;
-
-    if (!isRequester && !isDriver) {
-      return res.status(403).json({ error: "Not authorized" });
+    if (!request) {
+      return res.status(404).json({ error: "Request not found" });
     }
 
-    if (["delivered", "cancelled"].includes(request.status)) {
-      return res.status(400).json({ error: "Cannot cancel this request" });
+    if (request.requesterId !== userId) {
+      return res.status(403).json({ error: "Not your request" });
+    }
+
+    if (["in_transit", "delivered"].includes(request.status)) {
+      return res.status(400).json({
+        error: "Cannot cancel - item is already in transit or delivered",
+      });
+    }
+
+    if (request.status === "pending") {
+      await prisma.itemRequest.delete({ where: { id } });
+      return res.json({ success: true, message: "Request deleted" });
+    }
+
+    if (request.status === "cancelled") {
+      return res.status(400).json({ error: "Request already cancelled" });
     }
 
     await prisma.itemRequest.update({
@@ -275,23 +288,16 @@ const cancelItemRequest = async (req, res, next) => {
       data: { status: "cancelled" },
     });
 
-    if (isDriver && request.requesterId) {
-      await createNotification(
-        request.requesterId,
-        `Your item request "${request.itemName}" was cancelled by the driver`,
-        "/passenger",
-        "item"
-      );
-    } else if (isRequester && request.acceptedByDriver) {
+    if (request.acceptedByDriver) {
       await createNotification(
         request.acceptedByDriver,
-        `The requester cancelled the item request "${request.itemName}"`,
+        `Passenger cancelled the item request for "${request.itemName}"`,
         "/driver",
         "item"
       );
     }
 
-    res.json({ success: true });
+    res.json({ success: true, message: "Request cancelled" });
   } catch (err) {
     next(err);
   }

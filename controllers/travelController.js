@@ -1,7 +1,9 @@
 const prisma = require("../config/db");
+const createNotification = require("../utils/createNotification");
 const haversineKm = require("../utils/haversine");
 const { calculateFare } = require("../utils/fareCalculator");
 const { calculateRouteSummary } = require("../utils/routing");
+const { emitToUser } = require("../utils/socketEmit");
 
 const placeSearchCache = new Map();
 const reverseGeocodeCache = new Map();
@@ -440,6 +442,64 @@ const getTravelPostById = async (req, res, next) => {
   }
 };
 
+const cancelTrip = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+
+    const post = await prisma.travelPost.findUnique({
+      where: { id },
+      include: {
+        rideRequests: {
+          where: { status: { in: ["pending", "requested", "accepted"] } },
+          include: { passenger: { select: { id: true } } },
+        },
+      },
+    });
+
+    if (!post) return res.status(404).json({ error: "Trip not found" });
+    if (post.userId !== req.user.userId) {
+      return res.status(403).json({ error: "Not your trip" });
+    }
+    if (post.status === "completed") {
+      return res.status(400).json({ error: "Trip already completed" });
+    }
+    if (post.status === "cancelled") {
+      return res.status(400).json({ error: "Trip already cancelled" });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.travelPost.update({
+        where: { id },
+        data: { status: "cancelled" },
+      });
+      await tx.rideRequest.updateMany({
+        where: { travelPostId: id, status: { in: ["pending", "requested", "accepted"] } },
+        data: { status: "cancelled" },
+      });
+    });
+
+    for (const request of post.rideRequests) {
+      await createNotification(
+        request.passenger.id,
+        `Trip ${post.from} to ${post.to} has been cancelled by the driver`,
+        "/home",
+        "ride"
+      );
+      emitToUser(request.passenger.id, "ride:cancelled", {
+        travelPostId: id,
+        from: post.from,
+        to: post.to,
+      });
+      emitToUser(request.passenger.id, "dashboard:refresh", { reason: "trip_cancelled" });
+    }
+
+    emitToUser(req.user.userId, "dashboard:refresh", { reason: "trip_cancelled" });
+    res.json({ success: true, message: "Trip cancelled" });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   createTravelPost,
   getTravelPosts,
@@ -447,4 +507,5 @@ module.exports = {
   searchPlaces,
   reverseGeocode,
   calculateRoute,
+  cancelTrip,
 };

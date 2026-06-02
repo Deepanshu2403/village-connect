@@ -14,6 +14,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { getPassengerDashboard } from "../../api/dashboardApi";
+import { cancelItemRequest } from "../../api/itemApi";
 import { deletePassengerRequest } from "../../api/rideApi";
 import ActiveGoodsCard from "../../components/passenger/ActiveGoodsCard";
 import LocationDisplay from "../../components/location/LocationDisplay";
@@ -21,6 +22,7 @@ import { useAuth } from "../../context/AuthContext";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import { useCurrentLocation } from "../../hooks/useCurrentLocation";
+import { formatQuantity } from "../../utils/formatQuantity";
 
 export default function PassengerDashboard() {
   const { user } = useAuth();
@@ -45,6 +47,8 @@ export default function PassengerDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [deletingId, setDeletingId] = useState(null);
+  const [cancellingItemId, setCancellingItemId] = useState(null);
+  const [itemCancelDialog, setItemCancelDialog] = useState(null);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
 
   const fetchDashboard = async (silent = false) => {
@@ -156,6 +160,25 @@ export default function PassengerDashboard() {
     }
   };
 
+  const handleCancelItem = async () => {
+    if (!itemCancelDialog || cancellingItemId) return;
+    const { id } = itemCancelDialog;
+    setItemCancelDialog(null);
+    setCancellingItemId(id);
+    try {
+      await cancelItemRequest(id);
+      addToast("Item request removed", "info");
+      setDashData((prev) => ({
+        ...prev,
+        itemRequests: prev.itemRequests.filter((request) => request.id !== id),
+      }));
+    } catch (err) {
+      addToast(err.response?.data?.error || "Could not cancel request", "error");
+    } finally {
+      setCancellingItemId(null);
+    }
+  };
+
   const activeRide = dashData.activeRide || null;
   const confirmedRide = dashData.confirmedRides?.[0] || null;
   const pendingRides = dashData.pendingRides || [];
@@ -177,7 +200,7 @@ export default function PassengerDashboard() {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24">
+      <main className="page-root min-h-screen bg-gray-50 px-4 pb-10 pt-24">
         <div className="mx-auto max-w-2xl rounded-2xl bg-white p-8 text-center shadow-sm">
           <h1 className="text-xl font-extrabold text-gray-900">{error}</h1>
           <button
@@ -193,7 +216,7 @@ export default function PassengerDashboard() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+    <main className="page-root min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-3xl space-y-5">
         <section className="rounded-2xl bg-white p-5 shadow-sm">
           <p className="text-xs font-semibold uppercase tracking-wider text-orange-600">
@@ -285,7 +308,14 @@ export default function PassengerDashboard() {
             </div>
             <div className="space-y-3">
               {activeItemRequests.map((item) => (
-                <ItemRequestCard key={item.id} item={item} />
+                <ItemRequestCard
+                  key={item.id}
+                  item={item}
+                  cancelling={cancellingItemId === item.id}
+                  onRequestCancel={() =>
+                    setItemCancelDialog({ id: item.id, itemName: item.itemName })
+                  }
+                />
               ))}
             </div>
           </section>
@@ -349,6 +379,34 @@ export default function PassengerDashboard() {
           )}
         </section>
       </div>
+      {itemCancelDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="max-h-[90vh] w-full max-w-[380px] overflow-y-auto rounded-2xl bg-white p-6 text-center shadow-lg">
+            <Trash2 className="mx-auto mb-3 h-10 w-10 text-red-500" />
+            <h3 className="text-base font-extrabold text-gray-900">Remove this request?</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-500">
+              Your request for <strong>"{itemCancelDialog.itemName}"</strong> will be removed.
+              No driver has accepted it yet.
+            </p>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setItemCancelDialog(null)}
+                className="justify-center rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm font-bold text-gray-700"
+              >
+                Keep It
+              </button>
+              <button
+                type="button"
+                onClick={handleCancelItem}
+                className="justify-center rounded-xl bg-red-500 px-4 py-3 text-sm font-bold text-white"
+              >
+                Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }
@@ -512,7 +570,7 @@ function CompletedRideCard({ ride }) {
 
 function PendingRideCard({ ride, deletingId, onDelete }) {
   return (
-    <article className="flex items-start justify-between gap-3 rounded-xl border border-gray-200 bg-white p-4">
+    <article className="flex flex-col gap-3 rounded-xl border border-gray-200 bg-white p-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0">
         <RouteBlock from={ride.travelPost?.from} to={ride.travelPost?.to} compact />
         <FareBadge fare={ride.travelPost?.estimatedFare} />
@@ -528,7 +586,7 @@ function PendingRideCard({ ride, deletingId, onDelete }) {
         </p>
         <ExpiryCountdown expiresAt={ride.expiresAt} />
       </div>
-      <div className="flex flex-shrink-0 flex-col gap-2">
+      <div className="flex flex-shrink-0 flex-wrap gap-2 sm:flex-col">
         <StatusBadge tone="amber">Pending</StatusBadge>
         <button
           type="button"
@@ -579,14 +637,16 @@ function GoodsRequestCard({ request }) {
   );
 }
 
-function ItemRequestCard({ item }) {
+function ItemRequestCard({ item, cancelling, onRequestCancel }) {
   return (
     <article className="rounded-xl border border-gray-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-bold text-gray-900">
             {item.itemName}
-            {item.quantity > 1 ? ` x ${item.quantity}` : ""}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold text-gray-500">
+            {formatQuantity(item.quantity, item.quantityUnit)}
           </p>
           <p className="mt-1 text-xs text-gray-500">
             {item.from} to {item.to}
@@ -605,6 +665,21 @@ function ItemRequestCard({ item }) {
                 : item.status}
         </StatusBadge>
       </div>
+      {item.status === "pending" && (
+        <button
+          type="button"
+          onClick={onRequestCancel}
+          disabled={cancelling}
+          className="mt-3 inline-flex min-h-0 items-center gap-1 rounded-lg border border-red-200 bg-red-50 px-3 py-1.5 text-xs font-bold text-red-600 hover:bg-red-100 disabled:opacity-60"
+        >
+          {cancelling ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+          {cancelling ? "Removing..." : "Remove"}
+        </button>
+      )}
       {item.acceptedBy && (
         <div className="mt-3 flex items-center justify-between border-t border-gray-100 pt-3">
           <div>

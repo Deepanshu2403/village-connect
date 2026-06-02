@@ -179,7 +179,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
+    <main className="page-root min-h-screen bg-gray-50 px-3 pb-6 pt-20 md:px-6 md:pb-10">
       <div className="mx-auto max-w-7xl">
         <div className="pb-4 pt-2">
           <BackButton label="My Dashboard" to="/passenger" />

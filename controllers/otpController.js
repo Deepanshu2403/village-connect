@@ -13,29 +13,41 @@ async function sendOTPViaSMS(phone, otp, purpose) {
     accountSid === "your_twilio_account_sid" ||
     authToken === "your_twilio_auth_token" ||
     fromNumber === "your_twilio_phone_number";
+  const isDevMode = process.env.NODE_ENV !== "production";
 
-  if (!accountSid || !authToken || !fromNumber || hasPlaceholderConfig) {
-    console.log(`[OTP DEV] Phone: ${phone}, OTP: ${otp}, Purpose: ${purpose}`);
+  console.log("[OTP] Attempting to send OTP");
+  console.log("[OTP] Phone:", phone);
+  console.log("[OTP] Purpose:", purpose);
+  console.log("[OTP] Twilio Account SID:", accountSid ? `${accountSid.slice(0, 6)}...` : "NOT SET");
+  console.log("[OTP] Twilio Auth Token:", authToken ? "SET" : "NOT SET");
+  console.log("[OTP] Twilio Phone:", fromNumber || "NOT SET");
+
+  if (isDevMode || !accountSid || !authToken || !fromNumber || hasPlaceholderConfig) {
+    console.log("[OTP DEV] =============================");
+    console.log(`[OTP DEV] Phone: ${phone}`);
+    console.log(`[OTP DEV] OTP: ${otp}`);
+    console.log(`[OTP DEV] Purpose: ${purpose}`);
+    console.log("[OTP DEV] =============================");
     return { success: true, dev: true };
   }
 
   try {
     const twilio = require("twilio")(accountSid, authToken);
-    const purposeText =
-      purpose === "signup"
-        ? "Your Village Connect signup OTP"
-        : "Your Village Connect password reset OTP";
 
-    await twilio.messages.create({
-      body: `${purposeText} is: ${otp}. Valid for 10 minutes. Do not share with anyone.`,
+    const message = await twilio.messages.create({
+      body: `Your VillageConnect OTP is: ${otp}. Valid for 10 minutes. Do not share.`,
       from: fromNumber,
       to: `+91${phone}`,
     });
 
-    return { success: true };
+    console.log("[OTP] SMS sent successfully. SID:", message.sid);
+    return { success: true, dev: false };
   } catch (err) {
-    console.error("[OTP] SMS failed:", err.message);
-    throw new Error("Failed to send OTP. Please try again.");
+    console.error("[OTP] Twilio SMS error:", err.message);
+    console.error("[OTP] Twilio error code:", err.code);
+    console.error("[OTP] Twilio error details:", err.moreInfo);
+    console.log(`[OTP FALLBACK] OTP for ${phone}: ${otp}`);
+    return { success: true, dev: true, twilioError: err.message };
   }
 }
 

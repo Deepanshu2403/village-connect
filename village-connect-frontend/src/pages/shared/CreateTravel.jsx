@@ -331,7 +331,10 @@ const LocationPicker = ({ title, position, onChange }) => (
         {position.lat.toFixed(4)}, {position.lng.toFixed(4)}
       </p>
     </div>
-    <div className="h-[280px] overflow-hidden rounded-2xl border border-gray-200 md:h-[400px]">
+    <div
+      className="overflow-hidden rounded-2xl border border-gray-200"
+      style={{ height: "min(300px, 50vw)", minHeight: 180 }}
+    >
       <MapContainer
         key={`${title}-${position.lat}-${position.lng}`}
         center={[position.lat, position.lng]}

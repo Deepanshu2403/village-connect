@@ -117,7 +117,10 @@ export default function RideMap({
   };
 
   return (
-    <div className="h-[280px] overflow-hidden rounded-2xl bg-white shadow-md md:h-[400px]">
+    <div
+      className="overflow-hidden rounded-2xl bg-white shadow-md"
+      style={{ height: "min(300px, 50vw)", minHeight: 180 }}
+    >
       <MapContainer center={center} zoom={userLocation ? 11 : 5} className="h-full w-full">
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'

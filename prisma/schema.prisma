@@ -141,6 +141,7 @@ model ItemRequest {
   toLng            Float?
   itemName         String
   quantity         Int       @default(1)
+  quantityUnit     String    @default("items")
   description      String?
   category         String    @default("other")
   budget           Float?

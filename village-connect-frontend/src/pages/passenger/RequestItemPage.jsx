@@ -13,6 +13,7 @@ import { createItemRequest } from "../../api/itemApi";
 import BackButton from "../../components/common/BackButton";
 import LocationSearch from "../../components/location/LocationSearch";
 import { useToast } from "../../context/ToastContext";
+import { formatQuantity } from "../../utils/formatQuantity";
 
 const CATEGORIES = [
   { value: "medicine", label: "Medicine", desc: "Prescription drugs, OTC medicines", icon: Pill },
@@ -31,6 +32,7 @@ export default function RequestItemPage() {
   const [form, setForm] = useState({
     itemName: "",
     quantity: 1,
+    quantityUnit: "items",
     description: "",
     category: "other",
     budget: "",
@@ -84,7 +86,7 @@ export default function RequestItemPage() {
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
+    <main className="page-root min-h-screen bg-gray-50 px-4 pb-10 pt-24 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-lg">
         <div className="mb-5">
           <BackButton label="Back to Dashboard" to="/passenger" />
@@ -168,17 +170,36 @@ export default function RequestItemPage() {
             />
           </Field>
 
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Quantity">
-              <input
-                type="number"
-                name="quantity"
-                min="1"
-                max="100"
-                value={form.quantity}
-                onChange={handleChange}
-                className={inputClass}
-              />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field label="Quantity & Unit">
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  name="quantity"
+                  min="1"
+                  max="100"
+                  value={form.quantity}
+                  onChange={handleChange}
+                  className={`${inputClass} w-24 flex-none`}
+                />
+                <select
+                  name="quantityUnit"
+                  value={form.quantityUnit}
+                  onChange={handleChange}
+                  className={inputClass}
+                >
+                  <option value="items">Items</option>
+                  <option value="kg">Kilograms (kg)</option>
+                  <option value="g">Grams (g)</option>
+                  <option value="packets">Packets</option>
+                  <option value="litres">Litres</option>
+                </select>
+              </div>
+              {Number(form.quantity) > 0 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  Will show as: <strong>{formatQuantity(form.quantity, form.quantityUnit)}</strong>
+                </p>
+              )}
             </Field>
             <Field label="Budget (Rs)">
               <input

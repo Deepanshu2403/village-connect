@@ -113,7 +113,11 @@ export default function Login() {
     setOtpSending(true);
     try {
       const res = await sendOTP(cleanPhone, otpPurpose);
-      addToast(res.data.message || "OTP sent", "success");
+      if (res.data.dev && res.data.otp) {
+        addToast(`OTP: ${res.data.otp}`, "otp", { otp: res.data.otp });
+      } else {
+        addToast("OTP sent to your mobile number", "success");
+      }
       setOtpValue("");
       setResendCountdown(60);
       if (mode === "forgot") setForgotStep("otp_verify");

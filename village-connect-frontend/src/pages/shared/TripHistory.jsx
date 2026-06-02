@@ -45,7 +45,7 @@ export default function TripHistory() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 pt-16">
+    <div className="page-root min-h-screen bg-gray-50 pt-16">
       <div className="mx-auto max-w-2xl px-4 py-6">
         <div className="pb-4 pt-2">
           <BackButton label="Back" />
