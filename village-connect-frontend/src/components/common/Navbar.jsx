@@ -8,6 +8,7 @@ import {
   Package,
   Route,
   Settings,
+  ShieldCheck,
   ShoppingBag,
   UserRound,
   X,
@@ -127,7 +128,7 @@ export default function Navbar() {
     <nav className="fixed top-0 z-50 h-16 w-full bg-white/95 shadow-sm backdrop-blur">
       <div className="mx-auto flex h-full max-w-7xl items-center gap-4 px-4 sm:px-6 lg:px-8">
         <Link
-          to={user?.role === "driver" ? "/driver" : "/passenger"}
+          to={user?.role === "admin" ? "/admin" : user?.role === "driver" ? "/driver" : "/passenger"}
           className="flex items-center gap-3 font-extrabold text-gray-900"
           onClick={() => setMenuOpen(false)}
         >
@@ -274,6 +275,16 @@ export default function Navbar() {
               {user?.name}
             </span>
           </div>
+
+          {user?.role === "admin" && (
+            <Link
+              to="/admin"
+              className="hidden items-center gap-2 rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 text-xs font-bold text-orange-400 transition hover:bg-slate-900 md:flex"
+            >
+              <ShieldCheck className="h-4 w-4" />
+              Admin
+            </Link>
+          )}
 
           <button
             type="button"

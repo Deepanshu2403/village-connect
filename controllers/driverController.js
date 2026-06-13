@@ -133,7 +133,7 @@ const getDriverDashboard = async (req, res, next) => {
           },
         },
         orderBy: { createdAt: "desc" },
-        take: 20,
+        take: 50,
       }).catch(() => []),
       prisma.itemRequest.findMany({
         where: {
@@ -197,8 +197,13 @@ const getDriverDashboard = async (req, res, next) => {
               ? Math.round(haversineKm(driverLat, driverLng, request.fromLat, request.fromLng) * 10) / 10
               : null,
         }))
-        .filter((request) => request.distanceKm === null || request.distanceKm <= 15)
+        .filter((request) => request.distanceKm === null || request.distanceKm <= 10)
         .sort((a, b) => (a.distanceKm ?? 99) - (b.distanceKm ?? 99));
+    } else {
+      relevantItemRequests = openItemRequests.map((request) => ({
+        ...request,
+        distanceKm: null,
+      }));
     }
 
     const pendingCount = scheduledPosts.reduce(

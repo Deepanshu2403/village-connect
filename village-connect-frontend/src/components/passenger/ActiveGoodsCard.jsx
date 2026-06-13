@@ -4,7 +4,7 @@ import { CheckCircle, MessageCircle, Package, Phone } from "lucide-react";
 import { useSocket } from "../../context/SocketContext";
 import { useToast } from "../../context/ToastContext";
 import { useDriverLocationWatch } from "../../hooks/useDriverLocationWatch";
-import LiveTripMap from "../map/LiveTripMap";
+import UnifiedTrackingMap from "../map/UnifiedTrackingMap";
 
 export default function ActiveGoodsCard({ match, onUpdate }) {
   const { addToast } = useToast();
@@ -125,14 +125,18 @@ export default function ActiveGoodsCard({ match, onUpdate }) {
             <span className="h-1.5 w-1.5 rounded-full bg-green-500" />
             Tracking driver live
           </p>
-          <LiveTripMap
+          <UnifiedTrackingMap
             driverLocation={driverLocation}
             isStale={isStale}
-            fromLat={match.goodsRequest?.fromLat || match.travelPost?.fromLat}
-            fromLng={match.goodsRequest?.fromLng || match.travelPost?.fromLng}
-            toLat={match.goodsRequest?.toLat || match.travelPost?.toLat}
-            toLng={match.goodsRequest?.toLng || match.travelPost?.toLng}
+            pickupLat={match.goodsRequest?.fromLat || match.travelPost?.fromLat}
+            pickupLng={match.goodsRequest?.fromLng || match.travelPost?.fromLng}
+            dropLat={match.goodsRequest?.toLat || match.travelPost?.toLat}
+            dropLng={match.goodsRequest?.toLng || match.travelPost?.toLng}
+            pickupLabel={match.goodsRequest?.from}
+            dropLabel={match.goodsRequest?.to}
+            driverLabel={`Driver: ${match.driver?.name || "Driver"}`}
             height={240}
+            interactive={false}
           />
         </div>
       )}

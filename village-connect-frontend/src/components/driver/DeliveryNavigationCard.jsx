@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ExternalLink, MapPinned } from "lucide-react";
-import { MapContainer, Marker, Polyline, Popup, TileLayer } from "react-leaflet";
-import L from "leaflet";
 import { calculateRoute } from "../../api/locationApi";
-
-const pickupIcon = L.divIcon({
-  className: "",
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#16a34a;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
-
-const dropIcon = L.divIcon({
-  className: "",
-  html: '<div style="width:14px;height:14px;border-radius:50%;background:#dc2626;border:3px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.3)"></div>',
-  iconSize: [14, 14],
-  iconAnchor: [7, 7],
-});
+import UnifiedTrackingMap from "../map/UnifiedTrackingMap";
 
 const isCoordinate = (value) => value !== null && value !== undefined && value !== "";
 
@@ -29,7 +14,6 @@ export default function DeliveryNavigationCard({
   toName,
   title = "Navigation",
 }) {
-  const [routeCoords, setRouteCoords] = useState(null);
   const [routeInfo, setRouteInfo] = useState(null);
   const [loadingRoute, setLoadingRoute] = useState(false);
   const hasCoordinates =
@@ -54,12 +38,9 @@ export default function DeliveryNavigationCard({
       .then((res) => {
         if (cancelled) return;
         setRouteInfo(res.data);
-        if (res.data.geometry?.coordinates) {
-          setRouteCoords(res.data.geometry.coordinates.map((coord) => [coord[1], coord[0]]));
-        }
       })
       .catch(() => {
-        if (!cancelled) setRouteCoords(null);
+        if (!cancelled) setRouteInfo(null);
       })
       .finally(() => {
         if (!cancelled) setLoadingRoute(false);
@@ -75,10 +56,6 @@ export default function DeliveryNavigationCard({
     const url = `https://www.google.com/maps/dir/?api=1&origin=${fromLat},${fromLng}&destination=${toLat},${toLng}&travelmode=driving`;
     window.open(url, "_blank", "noopener,noreferrer");
   };
-
-  const center = points
-    ? [(points.from[0] + points.to[0]) / 2, (points.from[1] + points.to[1]) / 2]
-    : [20.5937, 78.9629];
 
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -109,35 +86,16 @@ export default function DeliveryNavigationCard({
       </div>
 
       {hasCoordinates && points && (
-        <div style={{ height: "min(300px, 50vw)", minHeight: 180 }}>
-          <MapContainer
-            center={center}
-            zoom={11}
-            style={{ height: "100%", width: "100%" }}
-            zoomControl={false}
-            scrollWheelZoom={false}
-          >
-            <TileLayer
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-              attribution="(c) OpenStreetMap"
-            />
-            <Marker position={points.from} icon={pickupIcon}>
-              <Popup>Pickup: {fromName || "Pickup"}</Popup>
-            </Marker>
-            <Marker position={points.to} icon={dropIcon}>
-              <Popup>Drop: {toName || "Drop"}</Popup>
-            </Marker>
-            <Polyline
-              positions={routeCoords || [points.from, points.to]}
-              pathOptions={{
-                color: "#f97316",
-                weight: routeCoords ? 4 : 3,
-                opacity: routeCoords ? 0.8 : 0.55,
-                dashArray: routeCoords ? undefined : "8 6",
-              }}
-            />
-          </MapContainer>
-        </div>
+        <UnifiedTrackingMap
+          pickupLat={points.from[0]}
+          pickupLng={points.from[1]}
+          dropLat={points.to[0]}
+          dropLng={points.to[1]}
+          pickupLabel={fromName || "Pickup"}
+          dropLabel={toName || "Drop"}
+          height={200}
+          interactive={false}
+        />
       )}
 
       <div className="p-4 pt-3">

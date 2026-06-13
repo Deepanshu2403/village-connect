@@ -176,52 +176,52 @@ const createTravelPost = async (req, res, next) => {
 const searchPlaces = async (req, res, next) => {
   try {
     const { q } = req.query;
-    const query = String(q || "").trim();
-
-    if (query.length < 2) {
+    if (!q || q.trim().length < 2) {
       return res.json({ success: true, results: [] });
     }
 
+    const query = q.trim();
     const cacheKey = query.toLowerCase();
     if (placeSearchCache.has(cacheKey)) {
       return res.json({ success: true, results: placeSearchCache.get(cacheKey) });
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 80));
 
     const headers = {
-      "User-Agent": "VillageConnect/1.0 rural-transport-india contact@villageconnect.in",
+      "User-Agent": "VillageConnect/1.0 contact@villageconnect.in",
       "Accept-Language": "en",
       Accept: "application/json",
     };
 
-    const baseParams = new URLSearchParams({
+    const params = new URLSearchParams({
       format: "jsonv2",
       addressdetails: "1",
       limit: "15",
       countrycodes: "in",
       "accept-language": "en",
       dedupe: "1",
+      featuretype: "settlement",
     });
 
     const searches = await Promise.allSettled([
       fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&${baseParams}`,
-        { headers }
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&${params}`,
+        { headers, signal: AbortSignal.timeout(6000) }
       ).then((response) => (response.ok ? response.json() : [])),
       fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${query}, India`)}&${baseParams}`,
-        { headers }
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(`${query} India`)}&${params}`,
+        { headers, signal: AbortSignal.timeout(6000) }
       ).then((response) => (response.ok ? response.json() : [])),
     ]);
 
     const combined = [];
     const seen = new Set();
 
-    const processResults = (results) => {
-      if (!Array.isArray(results)) return;
+    const process = (items) => {
+      if (!Array.isArray(items)) return;
 
-      for (const item of results) {
+      for (const item of items) {
         const lat = parseFloat(item.lat);
         const lng = parseFloat(item.lon);
         if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
@@ -230,44 +230,45 @@ const searchPlaces = async (req, res, next) => {
         if (seen.has(key)) continue;
         seen.add(key);
 
+        if (/[\u0900-\u097F]/.test(item.display_name || "")) continue;
+
         const addr = item.address || {};
-        const primaryName =
+        const name =
           addr.village ||
           addr.hamlet ||
           addr.neighbourhood ||
           addr.suburb ||
-          addr.quarter ||
           addr.town ||
           addr.city ||
           addr.municipality ||
+          addr.county ||
           item.name ||
           item.display_name?.split(",")[0];
 
-        if (!primaryName || primaryName.length < 2) continue;
-        if (/[\u0900-\u097F]/.test(primaryName)) continue;
+        if (!name || name.length < 2) continue;
+        if (/[\u0900-\u097F]/.test(name)) continue;
 
-        const contextParts = [
-          addr.county || addr.state_district,
-          addr.state,
-        ].filter(Boolean);
+        const district = addr.county || addr.state_district || "";
+        const state = addr.state || "";
+        const contextParts = [district, state].filter(Boolean);
         const context = [...new Set(contextParts)].join(", ");
+        const displayName = context ? `${name}, ${context}` : name;
 
         combined.push({
-          name: primaryName,
+          name,
           context,
-          shortAddress: context,
-          displayName: context ? `${primaryName}, ${context}` : primaryName,
+          displayName,
           fullAddress: item.display_name,
           lat,
           lng,
-          type: item.type || item.category,
+          type: item.type,
           importance: parseFloat(item.importance) || 0,
         });
       }
     };
 
     for (const result of searches) {
-      if (result.status === "fulfilled") processResults(result.value);
+      if (result.status === "fulfilled") process(result.value);
     }
 
     const results = combined
@@ -281,7 +282,7 @@ const searchPlaces = async (req, res, next) => {
     placeSearchCache.set(cacheKey, results);
     res.json({ success: true, results });
   } catch (err) {
-    next(err);
+    res.json({ success: true, results: [] });
   }
 };
 
@@ -298,17 +299,16 @@ const reverseGeocode = async (req, res, next) => {
       return res.json(reverseGeocodeCache.get(cacheKey));
     }
 
-    const url = `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&addressdetails=1&accept-language=en`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "VillageConnect/1.0 (rural-transport-platform)",
-        "Accept-Language": "en",
-      },
-    });
-
-    if (!response.ok) {
-      return res.status(502).json({ error: "Reverse geocoding unavailable" });
-    }
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/reverse?lat=${encodeURIComponent(lat)}&lon=${encodeURIComponent(lng)}&format=jsonv2&addressdetails=1`,
+      {
+        headers: {
+          "User-Agent": "VillageConnect/1.0",
+          "Accept-Language": "en",
+        },
+        signal: AbortSignal.timeout(5000),
+      }
+    );
 
     const data = await response.json();
     const addr = data.address || {};
@@ -319,9 +319,15 @@ const reverseGeocode = async (req, res, next) => {
       addr.suburb ||
       addr.hamlet ||
       addr.county ||
-      data.display_name?.split(",")[0];
+      data.display_name?.split(",")[0] ||
+      "Unknown";
     const state = addr.state || "";
-    const placeName = state ? `${town}, ${state}` : town || "Unknown location";
+    const district = addr.county || addr.state_district || "";
+    const placeName = [town, district, state]
+      .filter(Boolean)
+      .filter((value, index, values) => values.indexOf(value) === index)
+      .slice(0, 2)
+      .join(", ");
 
     const payload = {
       success: true,
@@ -333,7 +339,7 @@ const reverseGeocode = async (req, res, next) => {
     reverseGeocodeCache.set(cacheKey, payload);
     res.json(payload);
   } catch (err) {
-    next(err);
+    res.json({ success: true, placeName: "Location detected", town: "", state: "" });
   }
 };
 

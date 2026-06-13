@@ -4,57 +4,81 @@ const { emitToUser } = require("../utils/socketEmit");
 
 const createGoodsMatch = async (req, res, next) => {
   try {
-    const goodsRequestId = Number(req.body.goodsRequestId);
-    const travelPostId = Number(req.body.travelPostId);
+    const { goodsRequestId } = req.body;
+    const driverId = req.user.userId;
+
+    if (!goodsRequestId) {
+      return res.status(400).json({ error: "goodsRequestId is required" });
+    }
+
+    const activeTrip = await prisma.travelPost.findFirst({
+      where: {
+        userId: driverId,
+        status: { in: ["active", "pickup_done"] },
+      },
+    });
+
+    if (activeTrip) {
+      return res.status(400).json({
+        error: "You cannot accept goods delivery while a trip is in progress. Complete your current trip first.",
+      });
+    }
 
     const goodsRequest = await prisma.goodsRequest.findUnique({
-      where: { id: goodsRequestId },
+      where: { id: Number(goodsRequestId) },
+      include: {
+        requester: { select: { id: true, name: true } },
+      },
     });
 
     if (!goodsRequest) {
-      return res.status(404).json({
-        success: false,
-        error: "Goods request not found",
-      });
+      return res.status(404).json({ error: "Goods request not found" });
     }
 
-    const travelPost = await prisma.travelPost.findUnique({
-      where: { id: travelPostId },
+    if (goodsRequest.status !== "pending") {
+      return res.status(400).json({ error: "This goods request is no longer available" });
+    }
+
+    const scheduledTrip = await prisma.travelPost.findFirst({
+      where: {
+        userId: driverId,
+        status: "scheduled",
+        time: { gt: new Date() },
+      },
+      orderBy: { time: "asc" },
     });
-
-    if (!travelPost || travelPost.userId !== req.user.userId) {
-      return res.status(403).json({
-        success: false,
-        error: "You can only offer delivery from your own travel post",
-      });
-    }
 
     const match = await prisma.goodsMatch.create({
       data: {
-        goodsRequestId,
-        travelPostId,
-        driverId: req.user.userId,
+        goodsRequestId: Number(goodsRequestId),
+        driverId,
+        travelPostId: scheduledTrip?.id || null,
         status: "accepted",
       },
     });
 
     await prisma.goodsRequest.update({
-      where: { id: goodsRequestId },
+      where: { id: Number(goodsRequestId) },
       data: {
         status: "accepted",
-        driverId: req.user.userId,
-        travelPostId,
+        driverId,
+        travelPostId: scheduledTrip?.id || null,
       },
     });
 
+    const driver = await prisma.user.findUnique({
+      where: { id: driverId },
+      select: { name: true, phone: true },
+    });
+
     await createNotification(
-      goodsRequest.requesterId,
-      `Your goods delivery request for ${goodsRequest.item} (${goodsRequest.from} → ${goodsRequest.to}) has been accepted`,
+      goodsRequest.requester.id,
+      `Your goods request "${goodsRequest.item}" has been accepted by ${driver.name}. Contact: ${driver.phone}`,
       "/passenger",
-      "GOODS_MATCH"
+      "goods"
     );
 
-    res.json({ success: true, match });
+    res.status(201).json({ success: true, match });
   } catch (err) {
     next(err);
   }

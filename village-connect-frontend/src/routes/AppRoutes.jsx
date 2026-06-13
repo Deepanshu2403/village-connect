@@ -77,7 +77,10 @@ const NavigateButton = ({ to, label }) => (
 export default function AppRoutes() {
   const { user } = useAuth();
   const location = useLocation();
-  const showNavbar = Boolean(user) && !["/", "/login"].includes(location.pathname);
+  const showNavbar =
+    Boolean(user) &&
+    !["/", "/login"].includes(location.pathname) &&
+    !location.pathname.startsWith("/admin");
 
   return (
     <>
@@ -93,7 +96,7 @@ export default function AppRoutes() {
           }
         />
         <Route
-          path="/admin"
+          path="/admin/*"
           element={
             <PrivateRoute role="admin">
               <AdminDashboard />

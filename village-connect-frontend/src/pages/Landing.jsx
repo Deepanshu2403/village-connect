@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useEffect } from "react";
 import {
   ArrowRight,
   Bell,
@@ -13,6 +14,7 @@ import {
   Star,
   UsersRound,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const platformHighlights = [
   {
@@ -72,7 +74,15 @@ const activityItems = [
 ];
 
 export default function Landing() {
+  const { user } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!user) return;
+    if (user.role === "admin") navigate("/admin", { replace: true });
+    else if (user.role === "driver") navigate("/driver", { replace: true });
+    else navigate("/passenger", { replace: true });
+  }, [navigate, user]);
 
   const handleRoleSelect = (role, mode = "login") => {
     navigate("/login", { state: { role, mode } });

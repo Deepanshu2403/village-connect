@@ -27,9 +27,17 @@ export const ToastProvider = ({ children }) => {
   }, []);
 
   const addToast = useCallback((message, type = "info", options = {}) => {
+    let safeMessage = message;
+    if (typeof safeMessage !== "string") {
+      safeMessage = "Something went wrong. Please try again.";
+    }
+    if (safeMessage.startsWith("http") || safeMessage.includes("/api/")) {
+      safeMessage = "Action failed. Please try again.";
+    }
+
     const id = Date.now() + Math.random();
-    setToasts((prev) => [...prev, { id, message, type, ...options }]);
-    const duration = type === "otp" ? 15000 : 4000;
+    const duration = options.duration || (type === "otp" ? 15000 : type === "error" ? 5000 : 4000);
+    setToasts((prev) => [...prev, { id, message: safeMessage, type, ...options }]);
     setTimeout(() => removeToast(id), duration);
   }, [removeToast]);
 

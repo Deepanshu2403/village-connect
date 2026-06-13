@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CarFront, Package, UsersRound } from "lucide-react";
+import { CarFront, Copy, Package, ShieldCheck, UsersRound } from "lucide-react";
 import { resetPassword, sendOTP, verifyOTP } from "../../api/authApi";
 import { useAuth } from "../../context/AuthContext";
 import { useToast } from "../../context/ToastContext";
@@ -73,12 +73,26 @@ export default function Login() {
   const [otpSending, setOtpSending] = useState(false);
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [resendCountdown, setResendCountdown] = useState(0);
+  const [displayOtp, setDisplayOtp] = useState("");
+  const [otpCopied, setOtpCopied] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
     setMode(initialMode);
     setSignupForm((current) => ({ ...current, role: selectedRole }));
+    setDisplayOtp("");
+    setOtpValue("");
+    setOtpCopied(false);
   }, [initialMode, selectedRole]);
+
+  useEffect(() => {
+    if (!location.state?.adminHint) return;
+    setMode("login");
+    setError("");
+    setDisplayOtp("");
+    setOtpValue("");
+    setOtpCopied(false);
+  }, [location.state?.adminHint]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return undefined;
@@ -93,6 +107,8 @@ export default function Login() {
     setMode(nextMode);
     setError("");
     setOtpValue("");
+    setDisplayOtp("");
+    setOtpCopied(false);
     setResendCountdown(0);
     if (nextMode === "signup") setSignupStep("phone");
     if (nextMode === "forgot") setForgotStep("phone");
@@ -110,15 +126,18 @@ export default function Login() {
     }
 
     setError("");
+    setDisplayOtp("");
+    setOtpCopied(false);
     setOtpSending(true);
     try {
       const res = await sendOTP(cleanPhone, otpPurpose);
-      if (res.data.dev && res.data.otp) {
-        addToast(`OTP: ${res.data.otp}`, "otp", { otp: res.data.otp });
+
+      if (res.data.otp) {
+        setDisplayOtp(res.data.otp);
+        setOtpValue(res.data.otp);
       } else {
-        addToast("OTP sent to your mobile number", "success");
+        setOtpValue("");
       }
-      setOtpValue("");
       setResendCountdown(60);
       if (mode === "forgot") setForgotStep("otp_verify");
       else setSignupStep("otp_verify");
@@ -131,6 +150,24 @@ export default function Login() {
     }
   };
 
+  const handleCopyOtp = () => {
+    if (!displayOtp) return;
+
+    navigator.clipboard?.writeText(displayOtp).then(() => {
+      setOtpCopied(true);
+      window.setTimeout(() => setOtpCopied(false), 2000);
+    }).catch(() => {
+      const el = document.createElement("textarea");
+      el.value = displayOtp;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setOtpCopied(true);
+      window.setTimeout(() => setOtpCopied(false), 2000);
+    });
+  };
+
   const handleVerifyOTP = async (nextOtp = otpValue) => {
     if (otpVerifying || nextOtp.length !== 6) return;
     setError("");
@@ -138,6 +175,8 @@ export default function Login() {
     try {
       await verifyOTP(cleanPhone, nextOtp, otpPurpose);
       addToast("Phone verified", "success");
+      setDisplayOtp("");
+      setOtpCopied(false);
       if (mode === "forgot") setForgotStep("newpass");
       else setSignupStep("details");
     } catch (err) {
@@ -390,6 +429,9 @@ export default function Login() {
                   verifying={otpVerifying}
                   sending={otpSending}
                   countdown={resendCountdown}
+                  displayOtp={displayOtp}
+                  otpCopied={otpCopied}
+                  onCopyOtp={handleCopyOtp}
                 />
               )}
 
@@ -458,6 +500,9 @@ export default function Login() {
                   verifying={otpVerifying}
                   sending={otpSending}
                   countdown={resendCountdown}
+                  displayOtp={displayOtp}
+                  otpCopied={otpCopied}
+                  onCopyOtp={handleCopyOtp}
                 />
               )}
 
@@ -496,6 +541,24 @@ export default function Login() {
             <span>Trips, parcels and chat connected together</span>
           </div>
         </div>
+
+        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
+          <p className="text-xs font-semibold text-slate-500">Are you a platform administrator?</p>
+          <button
+            type="button"
+            onClick={() => {
+              switchMode("login");
+              navigate("/login", { state: { adminHint: true }, replace: true });
+            }}
+            className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-orange-400 transition hover:bg-slate-900"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            Admin Login
+          </button>
+          <p className="mt-2 text-[11px] font-medium text-slate-400">
+            Use your admin credentials to access the dashboard.
+          </p>
+        </div>
       </div>
     </main>
   );
@@ -511,9 +574,35 @@ const OTPPanel = ({
   verifying,
   sending,
   countdown,
+  displayOtp,
+  otpCopied,
+  onCopyOtp,
 }) => (
   <div className="space-y-4">
     <p className="text-xs text-gray-500">OTP sent to +91 {phone}</p>
+    {displayOtp && (
+      <div className="rounded-2xl border-2 border-orange-500 bg-slate-800 px-5 py-4">
+        <p className="mb-2 text-center text-[11px] font-bold uppercase tracking-widest text-slate-400">
+          Your OTP Code
+        </p>
+        <div className="mb-3 text-center font-mono text-4xl font-black tracking-[0.18em] text-white">
+          {displayOtp}
+        </div>
+        <button
+          type="button"
+          onClick={onCopyOtp}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-bold text-white transition-colors ${
+            otpCopied ? "bg-green-600" : "bg-orange-500 hover:bg-orange-600"
+          }`}
+        >
+          <Copy className="h-4 w-4" />
+          {otpCopied ? "Copied" : "Copy OTP"}
+        </button>
+        <p className="mt-2 text-center text-[11px] font-medium text-slate-400">
+          Valid for 10 minutes
+        </p>
+      </div>
+    )}
     <OTPInput value={value} onChange={setValue} onComplete={onComplete} />
     <button type="button" disabled={verifying || value.length !== 6} onClick={onVerify} className={buttonClass}>
       {verifying ? "Verifying..." : "Verify OTP"}

@@ -200,12 +200,7 @@ export default function DriverDashboard() {
     if (goodsActionLoading) return;
     setGoodsActionLoading(goodsId);
     try {
-      const activeTripId = data?.scheduledPosts?.[0]?.id || data?.activePost?.id;
-      if (!activeTripId) {
-        addToast("You need an active or scheduled trip to accept goods delivery", "warning");
-        return;
-      }
-      await acceptGoodsDelivery({ goodsRequestId: goodsId, travelPostId: activeTripId });
+      await acceptGoodsDelivery({ goodsRequestId: goodsId });
       addToast("Goods delivery accepted", "success");
       await fetchDashboard(true);
     } catch (err) {
@@ -238,8 +233,7 @@ export default function DriverDashboard() {
     if (itemActionLoading) return;
     setItemActionLoading(itemId);
     try {
-      const activeTripId = data?.scheduledPosts?.[0]?.id || data?.activePost?.id;
-      await acceptItemRequest(itemId, activeTripId);
+      await acceptItemRequest(itemId);
       addToast("Item request accepted", "success");
       await fetchDashboard(true);
     } catch (err) {
@@ -361,6 +355,12 @@ export default function DriverDashboard() {
           loading={locationLoading}
           permissionDenied={permissionDenied}
         />
+
+        {activePost && (
+          <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800">
+            You have an active trip in progress. Complete it before accepting new deliveries.
+          </div>
+        )}
 
         {activePost && (
           <ActiveTripCard

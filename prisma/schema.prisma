@@ -160,14 +160,14 @@ model ItemRequest {
 model GoodsMatch {
   id             Int       @id @default(autoincrement())
   goodsRequestId Int
-  travelPostId   Int
+  travelPostId   Int?
   driverId       Int
   status         String    @default("accepted")
   pickedUpAt     DateTime?
   deliveredAt    DateTime?
 
   goodsRequest GoodsRequest @relation(fields: [goodsRequestId], references: [id])
-  travelPost   TravelPost   @relation(fields: [travelPostId], references: [id])
+  travelPost   TravelPost?  @relation(fields: [travelPostId], references: [id], onDelete: SetNull)
   driver       User         @relation("DriverGoodsMatches", fields: [driverId], references: [id])
 
   createdAt DateTime @default(now())

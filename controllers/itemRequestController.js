@@ -132,7 +132,19 @@ const getItemRequests = async (req, res, next) => {
 const acceptItemRequest = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const { travelPostId } = req.body;
+
+    const activeTrip = await prisma.travelPost.findFirst({
+      where: {
+        userId: req.user.userId,
+        status: { in: ["active", "pickup_done"] },
+      },
+    });
+
+    if (activeTrip) {
+      return res.status(400).json({
+        error: "Cannot accept delivery while a trip is in progress",
+      });
+    }
 
     const request = await prisma.itemRequest.findUnique({
       where: { id },
@@ -151,12 +163,21 @@ const acceptItemRequest = async (req, res, next) => {
       select: { name: true, phone: true },
     });
 
+    const scheduledTrip = await prisma.travelPost.findFirst({
+      where: {
+        userId: req.user.userId,
+        status: "scheduled",
+        time: { gt: new Date() },
+      },
+      orderBy: { time: "asc" },
+    });
+
     await prisma.itemRequest.update({
       where: { id },
       data: {
         status: "accepted",
         acceptedByDriver: req.user.userId,
-        travelPostId: travelPostId ? Number(travelPostId) : null,
+        travelPostId: scheduledTrip?.id || null,
       },
     });
 

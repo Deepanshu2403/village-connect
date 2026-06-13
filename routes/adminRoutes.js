@@ -1,20 +1,31 @@
 const express = require("express");
-const auth = require("../middleware/authMiddleware");
-const admin = require("../middleware/adminMiddleware");
+const adminMiddleware = require("../middleware/adminMiddleware");
 const {
-  getAllUsers,
-  suspendUser,
-  getAllTrips,
   getStats,
+  getUsers,
+  toggleSuspend,
+  deleteUser,
+  getRides,
+  cancelRide,
+  deleteRide,
+  getGoods,
+  deleteGoods,
+  getBookings,
 } = require("../controllers/adminController");
 const asyncHandler = require("../middleware/asyncHandler");
 
 const router = express.Router();
 
-router.use(auth, admin);
-router.get("/users", asyncHandler(getAllUsers));
-router.put("/users/:id/suspend", asyncHandler(suspendUser));
-router.get("/trips", asyncHandler(getAllTrips));
+router.use(adminMiddleware);
 router.get("/stats", asyncHandler(getStats));
+router.get("/users", asyncHandler(getUsers));
+router.put("/users/:id/suspend", asyncHandler(toggleSuspend));
+router.delete("/users/:id", asyncHandler(deleteUser));
+router.get("/rides", asyncHandler(getRides));
+router.put("/rides/:id/cancel", asyncHandler(cancelRide));
+router.delete("/rides/:id", asyncHandler(deleteRide));
+router.get("/goods", asyncHandler(getGoods));
+router.delete("/goods/:id", asyncHandler(deleteGoods));
+router.get("/bookings", asyncHandler(getBookings));
 
 module.exports = router;
