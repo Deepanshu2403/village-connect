@@ -131,10 +131,12 @@ export default function Login() {
     setOtpSending(true);
     try {
       const res = await sendOTP(cleanPhone, otpPurpose);
+      const generatedOtp = res.data?.otp ?? res.data?.data?.otp ?? "";
 
-      if (res.data.otp) {
-        setDisplayOtp(res.data.otp);
-        setOtpValue(res.data.otp);
+      if (generatedOtp) {
+        setDisplayOtp(generatedOtp);
+        setOtpValue(generatedOtp);
+        addToast("OTP generated successfully", "otp", { otp: generatedOtp });
       } else {
         setOtpValue("");
       }
@@ -296,7 +298,7 @@ export default function Login() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-6">
-      <div className="w-full max-w-[380px]">
+      <div className="w-full max-w-95">
         <div className="mb-5 flex flex-col items-center justify-center text-center">
           <Link to="/" className="flex items-center gap-2 font-bold text-gray-900">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-orange-500 text-sm text-white shadow-sm">
