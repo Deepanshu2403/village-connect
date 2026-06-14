@@ -59,8 +59,9 @@ export default function Login() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const selectedRole = location.state?.role === "driver" ? "driver" : "passenger";
-  const initialMode = location.state?.mode === "signup" ? "signup" : "login";
+  const isAdminMode = Boolean(location.state?.adminHint);
+  const selectedRole = isAdminMode ? "admin" : location.state?.role === "driver" ? "driver" : "passenger";
+  const initialMode = isAdminMode ? "login" : location.state?.mode === "signup" ? "signup" : "login";
 
   const [mode, setMode] = useState(initialMode);
   const [loginForm, setLoginForm] = useState(initialLogin);
@@ -86,13 +87,14 @@ export default function Login() {
   }, [initialMode, selectedRole]);
 
   useEffect(() => {
-    if (!location.state?.adminHint) return;
+    if (!isAdminMode) return;
     setMode("login");
     setError("");
     setDisplayOtp("");
     setOtpValue("");
     setOtpCopied(false);
-  }, [location.state?.adminHint]);
+    setResendCountdown(0);
+  }, [isAdminMode]);
 
   useEffect(() => {
     if (resendCountdown <= 0) return undefined;
@@ -119,6 +121,7 @@ export default function Login() {
 
   const handleSendOTP = async () => {
     if (otpSending) return;
+    if (isAdminMode) return;
     const phoneError = validatePhone(cleanPhone);
     if (phoneError) {
       setError(phoneError);
@@ -233,6 +236,7 @@ export default function Login() {
   const handleSignup = async (event) => {
     event.preventDefault();
     if (loading) return;
+    if (isAdminMode) return;
     setError("");
 
     if (signupStep !== "details") {
@@ -268,6 +272,7 @@ export default function Login() {
   const handleResetPassword = async (event) => {
     event.preventDefault();
     if (loading) return;
+    if (isAdminMode) return;
     setError("");
 
     if (forgotStep !== "newpass") {
@@ -298,7 +303,7 @@ export default function Login() {
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-6">
-      <div className="w-full max-w-95">
+      <div className="w-full max-w-115 sm:max-w-130 lg:max-w-180">
         <div className="mb-5 flex flex-col items-center justify-center text-center">
           <Link to="/" className="flex items-center gap-2 font-bold text-gray-900">
             <span className="grid h-10 w-10 place-items-center rounded-xl bg-orange-500 text-sm text-white shadow-sm">
@@ -309,257 +314,273 @@ export default function Login() {
           <p className="mt-2 text-xs text-gray-500">Travel, transport and communication</p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm">
-          <div className="mb-5 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
-            {["login", "signup"].map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => switchMode(tab)}
-                className={`flex items-center justify-center rounded-lg py-2 text-sm font-semibold transition-all ${
-                  mode === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
-                }`}
-              >
-                {tab === "signup" ? "Sign Up" : "Login"}
-              </button>
-            ))}
+        <div className={`grid gap-5 ${isAdminMode ? "lg:grid-cols-[1.05fr_0.95fr]" : ""}`}>
+          <div className="rounded-2xl border border-gray-200 bg-white p-5 text-center shadow-sm">
+            {isAdminMode ? (
+              <div className="mb-5 text-left">
+                <p className="text-xs font-semibold uppercase tracking-wide text-orange-500">Administrator access</p>
+                <h1 className="mt-1 text-2xl font-black text-gray-900">Admin Login</h1>
+                <p className="mt-2 text-sm text-gray-500">Sign in to manage the platform dashboard.</p>
+              </div>
+            ) : (
+              <div className="mb-5 grid grid-cols-2 rounded-xl bg-gray-100 p-1">
+                {["login", "signup"].map((tab) => (
+                  <button
+                    key={tab}
+                    type="button"
+                    onClick={() => switchMode(tab)}
+                    className={`flex items-center justify-center rounded-lg py-2 text-sm font-semibold transition-all ${
+                      mode === tab ? "bg-white text-gray-900 shadow-sm" : "text-gray-500"
+                    }`}
+                  >
+                    {tab === "signup" ? "Sign Up" : "Login"}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div className="mb-5 text-center">
+              <p className="text-sm font-semibold text-gray-900">
+                {isAdminMode
+                  ? "Use your administrator credentials"
+                  : mode === "login"
+                    ? "Enter your credentials"
+                    : mode === "forgot"
+                      ? "Reset your password"
+                      : signupStep === "phone"
+                        ? "Verify your mobile number"
+                        : signupStep === "otp_verify"
+                          ? "Enter the OTP"
+                          : "Create your account"}
+              </p>
+            </div>
+
+            {error && (
+              <div className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-600">
+                {error}
+              </div>
+            )}
+
+            {(mode === "login" || isAdminMode) && (
+              <form className="space-y-4" onSubmit={handleLogin} noValidate>
+                <div className="text-center">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
+                    {isAdminMode ? (
+                      <ShieldCheck className="h-3.5 w-3.5" />
+                    ) : selectedRole === "driver" ? (
+                      <CarFront className="h-3.5 w-3.5" />
+                    ) : (
+                      <UsersRound className="h-3.5 w-3.5" />
+                    )}
+                    {isAdminMode
+                      ? "Administrator Login"
+                      : selectedRole === "driver"
+                        ? "Driver Dashboard"
+                        : "Passenger Dashboard"}
+                  </div>
+                </div>
+
+                <Field label="Phone Number">
+                  <input
+                    type="tel"
+                    value={loginForm.phone}
+                    maxLength={10}
+                    onChange={(event) =>
+                      setLoginForm({ ...loginForm, phone: event.target.value.replace(/\D/g, "") })
+                    }
+                    className={inputClass}
+                    placeholder={isAdminMode ? "Administrator mobile number" : "10 digit number"}
+                  />
+                </Field>
+
+                <Field label="Password">
+                  <input
+                    type="password"
+                    value={loginForm.password}
+                    onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
+                    className={inputClass}
+                    placeholder={isAdminMode ? "Administrator password" : "Enter password"}
+                  />
+                </Field>
+
+                <button type="submit" disabled={loading} className={buttonClass}>
+                  {loading ? "Logging in..." : isAdminMode ? "Administrator Login" : "Login"}
+                </button>
+
+                {!isAdminMode && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("forgot")}
+                    className="text-sm font-semibold text-orange-500 hover:text-orange-600"
+                  >
+                    Forgot Password?
+                  </button>
+                )}
+              </form>
+            )}
+
+            {!isAdminMode && mode === "signup" && (
+              <form className="space-y-4" onSubmit={handleSignup} noValidate>
+                {signupStep === "phone" && (
+                  <>
+                    <Field label="Phone Number">
+                      <input
+                        type="tel"
+                        value={signupForm.phone}
+                        maxLength={10}
+                        onChange={(event) =>
+                          setSignupForm({
+                            ...signupForm,
+                            phone: event.target.value.replace(/\D/g, ""),
+                          })
+                        }
+                        className={inputClass}
+                        placeholder="10 digit number"
+                      />
+                    </Field>
+                    <button type="button" disabled={otpSending} onClick={handleSendOTP} className={buttonClass}>
+                      {otpSending ? "Sending OTP..." : "Send OTP"}
+                    </button>
+                  </>
+                )}
+
+                {signupStep === "otp_verify" && (
+                  <OTPPanel
+                    phone={signupForm.phone}
+                    value={otpValue}
+                    setValue={setOtpValue}
+                    onComplete={handleVerifyOTP}
+                    onVerify={() => handleVerifyOTP()}
+                    onResend={handleSendOTP}
+                    verifying={otpVerifying}
+                    sending={otpSending}
+                    countdown={resendCountdown}
+                    displayOtp={displayOtp}
+                    otpCopied={otpCopied}
+                    onCopyOtp={handleCopyOtp}
+                  />
+                )}
+
+                {signupStep === "details" && (
+                  <>
+                    <VerifiedPhone phone={signupForm.phone} />
+                    <Field label="Full Name">
+                      <input
+                        type="text"
+                        value={signupForm.name}
+                        onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })}
+                        className={inputClass}
+                        placeholder="Your name"
+                      />
+                    </Field>
+                    <Field label="Password">
+                      <input
+                        type="password"
+                        value={signupForm.password}
+                        onChange={(event) =>
+                          setSignupForm({ ...signupForm, password: event.target.value })
+                        }
+                        className={inputClass}
+                        placeholder="Minimum 6 characters"
+                      />
+                    </Field>
+                    <RolePicker form={signupForm} setForm={setSignupForm} />
+                    <button type="submit" disabled={loading} className={buttonClass}>
+                      {loading ? "Creating..." : "Create Account"}
+                    </button>
+                  </>
+                )}
+              </form>
+            )}
+
+            {!isAdminMode && mode === "forgot" && (
+              <form className="space-y-4" onSubmit={handleResetPassword} noValidate>
+                {forgotStep === "phone" && (
+                  <>
+                    <Field label="Phone Number">
+                      <input
+                        type="tel"
+                        value={forgotForm.phone}
+                        maxLength={10}
+                        onChange={(event) =>
+                          setForgotForm({ ...forgotForm, phone: event.target.value.replace(/\D/g, "") })
+                        }
+                        className={inputClass}
+                        placeholder="Registered mobile number"
+                      />
+                    </Field>
+                    <button type="button" disabled={otpSending} onClick={handleSendOTP} className={buttonClass}>
+                      {otpSending ? "Sending OTP..." : "Send OTP"}
+                    </button>
+                  </>
+                )}
+
+                {forgotStep === "otp_verify" && (
+                  <OTPPanel
+                    phone={forgotForm.phone}
+                    value={otpValue}
+                    setValue={setOtpValue}
+                    onComplete={handleVerifyOTP}
+                    onVerify={() => handleVerifyOTP()}
+                    onResend={handleSendOTP}
+                    verifying={otpVerifying}
+                    sending={otpSending}
+                    countdown={resendCountdown}
+                    displayOtp={displayOtp}
+                    otpCopied={otpCopied}
+                    onCopyOtp={handleCopyOtp}
+                  />
+                )}
+
+                {forgotStep === "newpass" && (
+                  <>
+                    <VerifiedPhone phone={forgotForm.phone} />
+                    <Field label="New Password">
+                      <input
+                        type="password"
+                        value={forgotForm.newPassword}
+                        onChange={(event) =>
+                          setForgotForm({ ...forgotForm, newPassword: event.target.value })
+                        }
+                        className={inputClass}
+                        placeholder="Minimum 6 characters"
+                      />
+                    </Field>
+                    <button type="submit" disabled={loading} className={buttonClass}>
+                      {loading ? "Resetting..." : "Reset Password"}
+                    </button>
+                  </>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => switchMode("login")}
+                  className="text-sm font-semibold text-gray-500 hover:text-orange-600"
+                >
+                  Back to login
+                </button>
+              </form>
+            )}
+
+            {!isAdminMode && (
+              <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-gray-500">
+                <Package className="h-3.5 w-3.5 text-orange-500" />
+                <span>Trips, parcels and chat connected together</span>
+              </div>
+            )}
           </div>
 
-          <div className="mb-5 text-center">
-            <p className="text-sm font-semibold text-gray-900">
-              {mode === "login"
-                ? "Enter your credentials"
-                : mode === "forgot"
-                  ? "Reset your password"
-                  : signupStep === "phone"
-                    ? "Verify your mobile number"
-                    : signupStep === "otp_verify"
-                      ? "Enter the OTP"
-                      : "Create your account"}
-            </p>
-          </div>
-
-          {error && (
-            <div className="mb-4 rounded-xl bg-red-50 px-3 py-2 text-center text-xs font-medium text-red-600">
-              {error}
+          {isAdminMode && (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-6">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <InfoCard title="Phone" value="9000000000" />
+                <InfoCard title="Password" value="Admin@123" />
+              </div>
+              <p className="mt-4 text-xs leading-5 text-slate-500">
+                Use the administrator credentials to enter the dashboard.
+              </p>
             </div>
           )}
-
-          {mode === "login" && (
-            <form className="space-y-4" onSubmit={handleLogin} noValidate>
-              <div className="text-center">
-                <div className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
-                  {selectedRole === "driver" ? (
-                    <CarFront className="h-3.5 w-3.5" />
-                  ) : (
-                    <UsersRound className="h-3.5 w-3.5" />
-                  )}
-                  {selectedRole === "driver" ? "Driver Dashboard" : "Passenger Dashboard"}
-                </div>
-              </div>
-
-              <Field label="Phone Number">
-                <input
-                  type="tel"
-                  value={loginForm.phone}
-                  maxLength={10}
-                  onChange={(event) =>
-                    setLoginForm({ ...loginForm, phone: event.target.value.replace(/\D/g, "") })
-                  }
-                  className={inputClass}
-                  placeholder="10 digit number"
-                />
-              </Field>
-
-              <Field label="Password">
-                <input
-                  type="password"
-                  value={loginForm.password}
-                  onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })}
-                  className={inputClass}
-                  placeholder="Enter password"
-                />
-              </Field>
-
-              <button type="submit" disabled={loading} className={buttonClass}>
-                {loading ? "Logging in..." : "Login"}
-              </button>
-
-              <button
-                type="button"
-                onClick={() => switchMode("forgot")}
-                className="text-sm font-semibold text-orange-500 hover:text-orange-600"
-              >
-                Forgot Password?
-              </button>
-            </form>
-          )}
-
-          {mode === "signup" && (
-            <form className="space-y-4" onSubmit={handleSignup} noValidate>
-              {signupStep === "phone" && (
-                <>
-                  <Field label="Phone Number">
-                    <input
-                      type="tel"
-                      value={signupForm.phone}
-                      maxLength={10}
-                      onChange={(event) =>
-                        setSignupForm({
-                          ...signupForm,
-                          phone: event.target.value.replace(/\D/g, ""),
-                        })
-                      }
-                      className={inputClass}
-                      placeholder="10 digit number"
-                    />
-                  </Field>
-                  <button type="button" disabled={otpSending} onClick={handleSendOTP} className={buttonClass}>
-                    {otpSending ? "Sending OTP..." : "Send OTP"}
-                  </button>
-                </>
-              )}
-
-              {signupStep === "otp_verify" && (
-                <OTPPanel
-                  phone={signupForm.phone}
-                  value={otpValue}
-                  setValue={setOtpValue}
-                  onComplete={handleVerifyOTP}
-                  onVerify={() => handleVerifyOTP()}
-                  onResend={handleSendOTP}
-                  verifying={otpVerifying}
-                  sending={otpSending}
-                  countdown={resendCountdown}
-                  displayOtp={displayOtp}
-                  otpCopied={otpCopied}
-                  onCopyOtp={handleCopyOtp}
-                />
-              )}
-
-              {signupStep === "details" && (
-                <>
-                  <VerifiedPhone phone={signupForm.phone} />
-                  <Field label="Full Name">
-                    <input
-                      type="text"
-                      value={signupForm.name}
-                      onChange={(event) => setSignupForm({ ...signupForm, name: event.target.value })}
-                      className={inputClass}
-                      placeholder="Your name"
-                    />
-                  </Field>
-                  <Field label="Password">
-                    <input
-                      type="password"
-                      value={signupForm.password}
-                      onChange={(event) =>
-                        setSignupForm({ ...signupForm, password: event.target.value })
-                      }
-                      className={inputClass}
-                      placeholder="Minimum 6 characters"
-                    />
-                  </Field>
-                  <RolePicker form={signupForm} setForm={setSignupForm} />
-                  <button type="submit" disabled={loading} className={buttonClass}>
-                    {loading ? "Creating..." : "Create Account"}
-                  </button>
-                </>
-              )}
-            </form>
-          )}
-
-          {mode === "forgot" && (
-            <form className="space-y-4" onSubmit={handleResetPassword} noValidate>
-              {forgotStep === "phone" && (
-                <>
-                  <Field label="Phone Number">
-                    <input
-                      type="tel"
-                      value={forgotForm.phone}
-                      maxLength={10}
-                      onChange={(event) =>
-                        setForgotForm({ ...forgotForm, phone: event.target.value.replace(/\D/g, "") })
-                      }
-                      className={inputClass}
-                      placeholder="Registered mobile number"
-                    />
-                  </Field>
-                  <button type="button" disabled={otpSending} onClick={handleSendOTP} className={buttonClass}>
-                    {otpSending ? "Sending OTP..." : "Send OTP"}
-                  </button>
-                </>
-              )}
-
-              {forgotStep === "otp_verify" && (
-                <OTPPanel
-                  phone={forgotForm.phone}
-                  value={otpValue}
-                  setValue={setOtpValue}
-                  onComplete={handleVerifyOTP}
-                  onVerify={() => handleVerifyOTP()}
-                  onResend={handleSendOTP}
-                  verifying={otpVerifying}
-                  sending={otpSending}
-                  countdown={resendCountdown}
-                  displayOtp={displayOtp}
-                  otpCopied={otpCopied}
-                  onCopyOtp={handleCopyOtp}
-                />
-              )}
-
-              {forgotStep === "newpass" && (
-                <>
-                  <VerifiedPhone phone={forgotForm.phone} />
-                  <Field label="New Password">
-                    <input
-                      type="password"
-                      value={forgotForm.newPassword}
-                      onChange={(event) =>
-                        setForgotForm({ ...forgotForm, newPassword: event.target.value })
-                      }
-                      className={inputClass}
-                      placeholder="Minimum 6 characters"
-                    />
-                  </Field>
-                  <button type="submit" disabled={loading} className={buttonClass}>
-                    {loading ? "Resetting..." : "Reset Password"}
-                  </button>
-                </>
-              )}
-
-              <button
-                type="button"
-                onClick={() => switchMode("login")}
-                className="text-sm font-semibold text-gray-500 hover:text-orange-600"
-              >
-                Back to login
-              </button>
-            </form>
-          )}
-
-          <div className="mt-5 flex items-center justify-center gap-2 text-center text-xs text-gray-500">
-            <Package className="h-3.5 w-3.5 text-orange-500" />
-            <span>Trips, parcels and chat connected together</span>
-          </div>
-        </div>
-
-        <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center">
-          <p className="text-xs font-semibold text-slate-500">Are you a platform administrator?</p>
-          <button
-            type="button"
-            onClick={() => {
-              switchMode("login");
-              navigate("/login", { state: { adminHint: true }, replace: true });
-            }}
-            className="mt-3 inline-flex items-center justify-center gap-2 rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-orange-400 transition hover:bg-slate-900"
-          >
-            <ShieldCheck className="h-4 w-4" />
-            Admin Login
-          </button>
-          <p className="mt-2 text-[11px] font-medium text-slate-400">
-            Use your admin credentials to access the dashboard.
-          </p>
         </div>
       </div>
     </main>
@@ -672,3 +693,10 @@ const inputClass =
 
 const buttonClass =
   "flex w-full items-center justify-center rounded-xl bg-orange-500 py-2.5 text-center text-sm font-semibold text-white transition-all hover:bg-orange-600 disabled:opacity-60";
+
+const InfoCard = ({ title, value }) => (
+  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm">
+    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
+    <p className="mt-1 wrap-break-word text-sm font-bold text-slate-900">{value}</p>
+  </div>
+);
