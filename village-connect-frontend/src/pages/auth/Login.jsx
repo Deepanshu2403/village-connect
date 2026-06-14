@@ -570,17 +570,6 @@ export default function Login() {
             )}
           </div>
 
-          {isAdminMode && (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-5 shadow-sm sm:p-6">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <InfoCard title="Phone" value="9000000000" />
-                <InfoCard title="Password" value="Admin@123" />
-              </div>
-              <p className="mt-4 text-xs leading-5 text-slate-500">
-                Use the administrator credentials to enter the dashboard.
-              </p>
-            </div>
-          )}
         </div>
       </div>
     </main>
@@ -693,10 +682,3 @@ const inputClass =
 
 const buttonClass =
   "flex w-full items-center justify-center rounded-xl bg-orange-500 py-2.5 text-center text-sm font-semibold text-white transition-all hover:bg-orange-600 disabled:opacity-60";
-
-const InfoCard = ({ title, value }) => (
-  <div className="rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm">
-    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{title}</p>
-    <p className="mt-1 wrap-break-word text-sm font-bold text-slate-900">{value}</p>
-  </div>
-);

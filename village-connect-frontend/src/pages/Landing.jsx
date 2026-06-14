@@ -54,8 +54,97 @@ export default function Landing() {
   }, [user, navigate]);
 
   return (
-    <main style={pageStyle}>
+    <main style={pageStyle} className="landing-page">
+      <style>{`
+        .landing-header-inner {
+          flex-wrap: wrap;
+        }
+
+        .landing-brand {
+          min-width: 0;
+        }
+
+        .landing-actions {
+          flex-wrap: wrap;
+          justify-content: flex-end;
+        }
+
+        .landing-hero-shell {
+          padding-top: 48px;
+          padding-bottom: 56px;
+        }
+
+        .landing-badge {
+          max-width: 100%;
+        }
+
+        .landing-cta-grid {
+          width: 100%;
+        }
+
+        @media (max-width: 640px) {
+          .landing-page {
+            min-height: 100dvh;
+          }
+
+          .landing-shell {
+            padding-left: 16px;
+            padding-right: 16px;
+          }
+
+          .landing-header {
+            height: auto;
+            min-height: 60px;
+          }
+
+          .landing-header-inner {
+            padding-top: 10px;
+            padding-bottom: 10px;
+          }
+
+          .landing-actions {
+            width: 100%;
+            justify-content: space-between;
+          }
+
+          .landing-actions .landing-admin-button {
+            flex: 1 1 auto;
+          }
+
+          .landing-actions .landing-mark {
+            flex: 0 0 auto;
+          }
+
+          .landing-hero {
+            min-height: calc(100dvh - 60px);
+            align-items: start;
+          }
+
+          .landing-hero-shell {
+            padding-top: 36px;
+            padding-bottom: 40px;
+          }
+
+          .landing-title {
+            font-size: clamp(34px, 11vw, 52px) !important;
+          }
+
+          .landing-copy {
+            font-size: 16px !important;
+          }
+
+          .landing-cta-grid {
+            grid-template-columns: 1fr !important;
+            max-width: 100% !important;
+          }
+
+          .landing-cta {
+            width: 100%;
+          }
+        }
+      `}</style>
       <header
+        className="landing-header"
         style={{
           position: "sticky",
           top: 0,
@@ -67,6 +156,7 @@ export default function Landing() {
         }}
       >
         <div
+          className="landing-shell landing-header-inner"
           style={{
             ...shellStyle,
             height: "100%",
@@ -76,17 +166,18 @@ export default function Landing() {
             gap: 16,
           }}
         >
-          <Link to="/" style={{ textDecoration: "none", color: "white", display: "inline-flex", alignItems: "center", gap: 10 }}>
+          <Link to="/" className="landing-brand" style={{ textDecoration: "none", color: "white", display: "inline-flex", alignItems: "center", gap: 10 }}>
             <span style={{ fontSize: 17, fontWeight: 800, letterSpacing: "-0.03em" }}>
               <span>Village</span>
               <span style={{ color: "#fb923c" }}>Connect</span>
             </span>
           </Link>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div className="landing-actions" style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <Link
               to="/login"
               state={{ adminHint: true }}
+              className="landing-admin-button"
               style={{
                 ...buttonStyle,
                 minHeight: 40,
@@ -105,6 +196,7 @@ export default function Landing() {
       </header>
 
       <section
+        className="landing-hero"
         style={{
           minHeight: "calc(100vh - 60px)",
           display: "grid",
@@ -123,8 +215,9 @@ export default function Landing() {
           }}
         />
 
-        <div style={{ ...shellStyle, position: "relative", zIndex: 1, textAlign: "center" }}>
+        <div className="landing-shell landing-hero-shell" style={{ ...shellStyle, position: "relative", zIndex: 1, textAlign: "center" }}>
           <div
+            className="landing-badge"
             style={{
               display: "inline-flex",
               alignItems: "center",
@@ -144,6 +237,7 @@ export default function Landing() {
           </div>
 
           <h1
+            className="landing-title"
             style={{
               margin: "18px auto 0",
               maxWidth: 860,
@@ -160,6 +254,7 @@ export default function Landing() {
           </h1>
 
           <p
+            className="landing-copy"
             style={{
               margin: "18px auto 0",
               maxWidth: 620,
@@ -172,6 +267,7 @@ export default function Landing() {
           </p>
 
           <div
+            className="landing-cta-grid"
             style={{
               marginTop: 32,
               display: "grid",
@@ -185,6 +281,7 @@ export default function Landing() {
             <Link
               to="/login"
               state={{ role: "passenger", mode: "signup" }}
+              className="landing-cta"
               style={{
                 ...buttonStyle,
                 background: "linear-gradient(135deg, #f97316, #fb923c)",
@@ -197,6 +294,7 @@ export default function Landing() {
             <Link
               to="/login"
               state={{ role: "driver", mode: "signup" }}
+              className="landing-cta"
               style={{
                 ...buttonStyle,
                 background: "rgba(255,255,255,0.06)",
