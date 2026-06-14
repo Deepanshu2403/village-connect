@@ -262,7 +262,7 @@ export default function Home() {
             <h2 className="text-lg font-extrabold text-gray-950 md:text-xl">Results</h2>
             <p className="text-sm text-gray-500">{trips.length} ride{trips.length === 1 ? "" : "s"} found</p>
           </div>
-          <div className="grid grid-cols-2 rounded-2xl bg-white p-1 shadow-md">
+          <div className="grid grid-cols-1 rounded-2xl bg-white p-1 shadow-md sm:grid-cols-2">
             <ViewButton active={view === "list"} onClick={() => setView("list")} icon={List}>
               List View
             </ViewButton>
@@ -314,7 +314,7 @@ const ViewButton = ({ active, onClick, icon: Icon, children }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
+    className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-bold transition ${
       active ? "bg-orange-500 text-white" : "text-gray-600 hover:text-orange-600"
     }`}
   >

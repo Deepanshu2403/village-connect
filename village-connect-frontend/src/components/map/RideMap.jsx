@@ -172,7 +172,7 @@ export default function RideMap({
                 icon={isFull ? fullIcon : availableIcon}
               >
                 <Popup>
-                  <div className="min-w-[200px]">
+                  <div className="min-w-45 max-w-[calc(100vw-64px)]">
                     <h3 className="text-base font-extrabold text-gray-950">
                       {ride.user?.name || "Driver"}
                     </h3>

@@ -207,8 +207,8 @@ export default function Navbar() {
                   onClick={() => setNotifOpen(false)}
                 />
 
-                <div className="fixed left-3 right-3 top-[68px] z-50 flex max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl md:left-auto md:right-4 md:top-[72px] md:w-[320px] md:max-h-[480px]">
-                  <div className="flex flex-shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
+                <div className="fixed left-3 right-3 top-17 z-50 flex max-h-[75vh] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl md:left-auto md:right-4 md:top-18 md:w-[320px] md:max-h-120">
+                  <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-4 py-3">
                     <h3 className="text-sm font-bold text-gray-900">Notifications</h3>
                     <div className="flex items-center gap-2">
                       {unreadCount > 0 && (
@@ -257,7 +257,7 @@ export default function Navbar() {
 
                   <Link
                     to="/notifications"
-                    className="block flex-shrink-0 border-t border-gray-100 py-3 text-center text-sm font-semibold text-orange-500"
+                    className="block shrink-0 border-t border-gray-100 py-3 text-center text-sm font-semibold text-orange-500"
                     onClick={() => setNotifOpen(false)}
                   >
                     View all notifications
@@ -289,7 +289,7 @@ export default function Navbar() {
           <button
             type="button"
             onClick={handleLogout}
-            className="hidden items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:border-orange-400 hover:text-orange-600 md:flex"
+            className="hidden min-h-11 items-center gap-2 rounded-xl border border-gray-200 px-3 py-2 text-sm font-semibold text-gray-600 transition hover:border-orange-400 hover:text-orange-600 md:flex"
           >
             <LogOut className="h-4 w-4" />
             Logout
@@ -298,8 +298,9 @@ export default function Navbar() {
           <button
             type="button"
             onClick={() => setMenuOpen((open) => !open)}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-gray-200 text-gray-700 md:hidden"
+            className="grid h-11 w-11 place-items-center rounded-xl border border-gray-200 text-gray-700 md:hidden"
             aria-label="Toggle navigation menu"
+            aria-expanded={menuOpen}
           >
             {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>

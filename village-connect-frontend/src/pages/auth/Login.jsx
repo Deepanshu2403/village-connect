@@ -641,7 +641,7 @@ const RolePicker = ({ form, setForm }) => (
     <p className="mb-2 text-center text-xs font-semibold uppercase tracking-wide text-gray-500">
       Select Role
     </p>
-    <div className="grid grid-cols-2 gap-2">
+    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
       <button
         type="button"
         onClick={() => setForm({ ...form, role: "passenger" })}

@@ -186,7 +186,7 @@ export default function LocationSearch({
         </label>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row">
         <div className="relative flex-1">
           <input
             ref={inputRef}
@@ -211,7 +211,7 @@ export default function LocationSearch({
                 onChange?.({ name: "", lat: null, lng: null });
                 inputRef.current?.focus();
               }}
-              className="absolute right-2 top-1/2 grid h-7 w-7 -translate-y-1/2 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+              className="absolute right-2 top-1/2 grid h-11 w-11 -translate-y-1/2 place-items-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-orange-300"
               aria-label="Clear location"
             >
               <X className="h-4 w-4" />
@@ -224,7 +224,7 @@ export default function LocationSearch({
             type="button"
             onClick={handleCurrentLocation}
             disabled={detectingLocation}
-            className="inline-flex min-h-12 flex-shrink-0 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
+            className="inline-flex min-h-12 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 transition hover:bg-blue-100 disabled:opacity-60"
             title="Use current location"
           >
             {detectingLocation ? (
@@ -260,9 +260,9 @@ export default function LocationSearch({
                   key={landmark}
                   type="button"
                   onMouseDown={() => handleLandmarkSelect(landmark)}
-                  className="flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-orange-50"
+                  className="flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-orange-50"
                 >
-                  <Landmark className="h-4 w-4 flex-shrink-0 text-orange-400" />
+                  <Landmark className="h-4 w-4 shrink-0 text-orange-400" />
                   <span className="font-semibold text-gray-900">{landmark}</span>
                   {query.length > 1 && <span className="truncate text-xs text-gray-400">{query}</span>}
                 </button>
@@ -282,9 +282,9 @@ export default function LocationSearch({
                   key={`${place.fullAddress || place.displayName}-${index}`}
                   type="button"
                   onMouseDown={() => handleSelect(place)}
-                  className="flex w-full items-start gap-2 border-b border-gray-50 px-3 py-3 text-left text-sm transition last:border-0 hover:bg-orange-50"
+                  className="flex min-h-11 w-full items-start gap-2 border-b border-gray-50 px-3 py-3 text-left text-sm transition last:border-0 hover:bg-orange-50"
                 >
-                  <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0 text-orange-400" />
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-orange-400" />
                   <span className="min-w-0">
                     <span className="block truncate font-semibold text-gray-900">
                       {place.displayName || place.name}

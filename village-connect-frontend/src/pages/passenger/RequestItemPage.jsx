@@ -110,7 +110,7 @@ export default function RequestItemPage() {
               "Pay the driver when the item is delivered",
             ].map((step, index) => (
               <div key={step} className="flex items-start gap-2">
-                <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-orange-500 text-xs font-bold text-white">
                   {index + 1}
                 </span>
                 <p className="text-xs text-orange-800">{step}</p>
@@ -130,7 +130,7 @@ export default function RequestItemPage() {
             <label className="mb-2 block text-xs font-bold text-gray-700">
               Item Category
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
                 const active = form.category === cat.value;
@@ -145,7 +145,7 @@ export default function RequestItemPage() {
                         : "border-gray-200 bg-white hover:border-orange-200"
                     }`}
                   >
-                    <Icon className={`h-5 w-5 flex-shrink-0 ${active ? "text-orange-600" : "text-gray-500"}`} />
+                    <Icon className={`h-5 w-5 shrink-0 ${active ? "text-orange-600" : "text-gray-500"}`} />
                     <div className="min-w-0">
                       <p className={`text-xs font-bold ${active ? "text-orange-700" : "text-gray-800"}`}>
                         {cat.label}
@@ -180,7 +180,7 @@ export default function RequestItemPage() {
                   max="100"
                   value={form.quantity}
                   onChange={handleChange}
-                  className={`${inputClass} w-24 flex-none`}
+                  className={`${inputClass} w-full sm:w-24 sm:flex-none`}
                 />
                 <select
                   name="quantityUnit"

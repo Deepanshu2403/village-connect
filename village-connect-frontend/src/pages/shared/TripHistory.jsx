@@ -57,13 +57,13 @@ export default function TripHistory() {
           </div>
         </div>
 
-        <div className="flex bg-gray-100 rounded-xl p-1 mb-5 w-fit gap-1">
+        <div className="flex w-full gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1 mb-5 sm:w-fit">
           {["all", "completed", "cancelled"].map((item) => (
             <button
               key={item}
               type="button"
               onClick={() => setFilter(item)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-semibold transition-all capitalize ${
+              className={`min-h-11 min-w-24 rounded-lg px-4 py-2 text-sm font-semibold transition-all capitalize ${
                 filter === item
                   ? "bg-white shadow-sm text-gray-900"
                   : "text-gray-500 hover:text-gray-700"
@@ -137,13 +137,13 @@ function DriverTripCard({ trip }) {
           )}
           {pickupTime && dropTime && (
             <div className="flex-1 flex items-center justify-center">
-              <div className="h-0.5 bg-orange-300 flex-1 max-w-[60px]" />
+              <div className="h-0.5 flex-1 max-w-15 bg-orange-300" />
               {trip.durationMinutes && (
                 <span className="text-xs text-orange-500 font-bold mx-2">
                   {trip.durationMinutes}m
                 </span>
               )}
-              <div className="h-0.5 bg-orange-300 flex-1 max-w-[60px]" />
+              <div className="h-0.5 flex-1 max-w-15 bg-orange-300" />
             </div>
           )}
           {dropTime && (
@@ -219,7 +219,7 @@ function PassengerRideCard({ ride }) {
 
       {driver && (
         <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-orange-600 flex items-center justify-center text-white font-bold text-xs flex-shrink-0">
+          <div className="w-8 h-8 flex shrink-0 items-center justify-center rounded-full bg-linear-to-br from-orange-400 to-orange-600 text-xs font-bold text-white">
             {driver.name?.charAt(0)?.toUpperCase()}
           </div>
           <div>
@@ -263,7 +263,7 @@ function StatusPill({ status }) {
           : "bg-yellow-100 text-yellow-700";
 
   return (
-    <span className={`text-xs px-2.5 py-1 rounded-full font-bold flex-shrink-0 ${colors}`}>
+    <span className={`text-xs px-2.5 py-1 rounded-full font-bold shrink-0 ${colors}`}>
       {status}
     </span>
   );
